@@ -1085,19 +1085,16 @@ html, body, #root {
   cursor: pointer;
 }
 
-.fm-hub-list {
-  padding-bottom: 8px;
-}
-
 .fm-hub-cell-icon {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
+  width: var(--fm-icon-md, 29px);
+  height: var(--fm-icon-md, 29px);
+  border-radius: var(--fm-radius-icon, 7px);
   display: grid;
   place-items: center;
-  font-size: 15px;
+  font-size: var(--fm-icon-glyph, 17px);
   line-height: 1;
   flex-shrink: 0;
+  color: #fff;
 }
 
 .fm-hub-kyc-banner {

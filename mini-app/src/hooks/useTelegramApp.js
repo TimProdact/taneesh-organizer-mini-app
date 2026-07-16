@@ -33,7 +33,7 @@ function applyTelegramTheme(webApp) {
   if (tp.secondary_bg_color || tp.header_bg_color) {
     webApp.setHeaderColor(tp.secondary_bg_color || tp.header_bg_color);
   }
-  root.dataset.tguiPlatform = webApp.platform === 'ios' ? 'ios' : 'android';
+  root.dataset.tguiPlatform = webApp.platform === 'android' ? 'android' : 'ios';
 }
 
 export function useTelegramApp() {
@@ -75,7 +75,8 @@ export function useTelegramApp() {
     };
   }, []);
 
-  const platform = tg?.platform === 'ios' ? 'ios' : 'base';
+  /* Settings-style inset lists: iOS chrome everywhere except Android */
+  const platform = tg?.platform === 'android' ? 'base' : 'ios';
   const appearance = tg?.colorScheme === 'light' ? 'light' : 'dark';
   const initData = ready ? getInitData() : '';
 

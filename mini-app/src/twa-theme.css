@@ -4,24 +4,28 @@
  */
 
 :root {
-  /* ── Spacing (Social card reference) ── */
-  --fm-space-page: 20px;
-  --fm-space-section: 12px;
+  /* ── Spacing (Telegram Settings inset-grouped) ── */
+  --fm-space-page: 16px;
+  --fm-space-section: 22px;
   --fm-space-card: 12px;
-  --fm-space-card-x: 14px;
+  --fm-space-card-x: 16px;
   --fm-space-card-bottom: 14px;
-  --fm-gap-row: 12px;
+  --fm-gap-row: 16px;
   --fm-gap-tight: 8px;
   --fm-gap-micro: 6px;
   --fm-gap-stack: 2px;
+  --fm-list-pad-x: 16px;
+  --fm-list-pad-y: 10px;
 
-  /* ── Icons ── */
+  /* ── Icons (Settings menu tiles) ── */
   --fm-icon-sm: 20px;
-  --fm-icon-md: 30px;
+  --fm-icon-md: 29px;
   --fm-icon-lg: 40px;
-  --fm-icon-glyph: 22px;
-  --fm-radius-icon: 8px;
+  --fm-icon-glyph: 17px;
+  --fm-radius-icon: 7px;
   --fm-chevron-opacity: 0.35;
+  /* Cell pad-x + icon + gap → divider starts at label */
+  --fm-divider-inset-menu: calc(var(--fm-space-card-x) + var(--fm-icon-md) + var(--fm-gap-row));
 
   /* ── Radius ── */
   --fm-radius-card: 12px;
@@ -31,9 +35,9 @@
   --fm-radius-pill: 999px;
 
   /* ── Dividers ── */
-  --fm-separator: color-mix(in srgb, var(--tg-theme-hint-color, #8e8e93) 18%, transparent);
+  --fm-separator: color-mix(in srgb, var(--tg-theme-hint-color, #8e8e93) 22%, transparent);
   --fm-divider-weight: 0.5px;
-  --fm-divider-inset-md: calc(var(--fm-space-card-x) + var(--fm-icon-md) + var(--fm-gap-row));
+  --fm-divider-inset-md: var(--fm-divider-inset-menu);
   --fm-divider-inset-lg: calc(var(--fm-space-card-x) + var(--fm-icon-lg) + var(--fm-gap-row));
 
   /* ── Pills / chips ── */
@@ -193,6 +197,52 @@ html[data-tgui-platform='android'] body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--fm-gap-tight);
+}
+
+/* ── Inset-grouped lists (Telegram Settings) ── */
+.fm-hub-list,
+.fm-page-list {
+  padding: var(--fm-list-pad-y) var(--fm-list-pad-x) !important;
+  box-sizing: border-box;
+}
+
+.fm-hub-list > :not(:last-child),
+.fm-page-list > :not(:last-child) {
+  margin-bottom: var(--fm-space-section) !important;
+}
+
+/* Force iOS inset Section chrome on all platforms */
+.fm-hub-list > section > div,
+.fm-page-list > section > div {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.fm-hub-list > section > div > div:last-child,
+.fm-page-list > section > div > div:last-child {
+  background: var(--fm-surface-bg) !important;
+  border-radius: var(--fm-radius-card);
+  overflow: hidden;
+}
+
+/* Kit Section dividers are missing inset styles — restore Settings look */
+.fm-hub-list > section hr,
+.fm-page-list > section hr {
+  display: block;
+  border: 0;
+  border-top: var(--fm-divider-weight) solid var(--fm-separator);
+  margin: 0 0 0 var(--fm-divider-inset-menu);
+  height: 0;
+  background: transparent;
+  align-self: stretch;
+}
+
+.fm-hub-list .fm-hub-cell-icon,
+.fm-page-list .fm-hub-cell-icon {
+  width: var(--fm-icon-md);
+  height: var(--fm-icon-md);
+  border-radius: var(--fm-radius-icon);
+  font-size: var(--fm-icon-glyph);
 }
 
 /* ── In-set card groups (Variant A) ── */
