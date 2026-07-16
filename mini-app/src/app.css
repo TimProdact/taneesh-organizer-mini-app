@@ -781,6 +781,39 @@ body:has(.fm-qr-root) {
   padding-top: 4px;
 }
 
+/* Create-event wizard: [back] [title…] [1/7] */
+.fm-sheet-header--wizard {
+  grid-template-columns: 48px minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px var(--fm-space-page) 12px;
+}
+
+.fm-sheet-title--wizard {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--tg-theme-text-color);
+}
+
+.fm-sheet-counter {
+  display: block;
+  min-width: 0;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.25;
+  color: var(--tg-theme-hint-color);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .fm-sheet-back {
   width: 40px;
   height: 40px;

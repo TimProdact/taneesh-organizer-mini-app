@@ -5,6 +5,7 @@ export function BottomSheet({
   open,
   title,
   subtitle,
+  counter,
   onBack,
   onClose,
   children,
@@ -19,6 +20,8 @@ export function BottomSheet({
 
   if (!open) return null;
 
+  const wizardHeader = Boolean(onBack && counter);
+
   return (
     <div className="fm-sheet-root" role="presentation" onClick={onClose}>
       <div className="fm-sheet-backdrop" />
@@ -30,7 +33,13 @@ export function BottomSheet({
       >
         <div className="fm-sheet-handle" />
         {title ? (
-          <div className={`fm-sheet-header${onBack ? ' fm-sheet-header--with-back' : ''}`}>
+          <div
+            className={[
+              'fm-sheet-header',
+              onBack ? 'fm-sheet-header--with-back' : '',
+              wizardHeader ? 'fm-sheet-header--wizard' : '',
+            ].filter(Boolean).join(' ')}
+          >
             {onBack ? (
               <button
                 type="button"
@@ -44,11 +53,22 @@ export function BottomSheet({
                 <Icon24ChevronLeft />
               </button>
             ) : null}
-            <div className="fm-sheet-header-text">
-              <div className="fm-sheet-title">{title}</div>
-              {subtitle ? <div className="fm-sheet-subtitle">{subtitle}</div> : null}
-            </div>
-            <span className="fm-sheet-back-spacer" aria-hidden />
+            {wizardHeader ? (
+              <>
+                <h2 className="fm-sheet-title fm-sheet-title--wizard">{title}</h2>
+                <span className="fm-sheet-counter" aria-label={`Шаг ${counter}`}>
+                  {counter}
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="fm-sheet-header-text">
+                  <div className="fm-sheet-title">{title}</div>
+                  {subtitle ? <div className="fm-sheet-subtitle">{subtitle}</div> : null}
+                </div>
+                {onBack ? <span className="fm-sheet-back-spacer" aria-hidden /> : null}
+              </>
+            )}
           </div>
         ) : null}
         <div className="fm-sheet-body">{children}</div>

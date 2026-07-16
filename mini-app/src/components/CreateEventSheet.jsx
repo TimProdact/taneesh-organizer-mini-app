@@ -326,7 +326,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
       <BottomSheet
         open={open && !picker}
         title={STEP_HEADINGS[step - 1]}
-        subtitle={`Шаг ${step}/${STEPS}`}
+        counter={`${step}/${STEPS}`}
         className="fm-sheet-panel--wizard fm-sheet-panel--tall"
         onBack={goBack}
         onClose={onClose}
