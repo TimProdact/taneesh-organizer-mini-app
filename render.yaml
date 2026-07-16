@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: taneesh-organizer-api
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: .
+    buildCommand: npm install && npm install --prefix mini-app && npm run build:mini-app
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: TELEGRAM_ORGANIZER_IDS
+        sync: false
