@@ -1494,49 +1494,69 @@ button.fm-value-row {
   font-size: 0.9375rem;
 }
 
-/* Settings ValueRow: label never ellipsizes; value is one line + ellipsis */
+/*
+ * ValueRow — one horizontal line:
+ * [label] .............. [value…] [>]
+ * Label never ellipsizes; only value truncates.
+ */
+.fm-value-row {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+}
+
+.fm-value-row [class*='middle'] {
+  flex: 0 1 auto !important;
+  flex-grow: 0 !important;
+  max-width: 42%;
+  min-width: 0;
+}
+
+.fm-value-row [class*='head'],
 .fm-value-row [class*='title'] {
-  flex-shrink: 0 !important;
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap !important;
   max-width: none !important;
 }
 
-.fm-value-row [class*='head'] {
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
+.fm-value-row [class*='after'] {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  justify-content: flex-end !important;
   overflow: hidden;
 }
 
-.fm-value-row [class*='hint'],
-.fm-value-hint {
-  flex: 1 1 0 !important;
-  min-width: 0 !important;
+.fm-value-nav {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+}
+
+.fm-value-nav [class*='text'],
+.fm-value-text {
+  display: block;
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  overflow-wrap: normal !important;
+  word-break: keep-all !important;
   text-align: right;
   color: var(--tg-theme-hint-color, #8e8e93);
 }
 
-.fm-value-hint--muted {
+.fm-value-text--muted {
   opacity: 0.9;
 }
 
-.fm-value-row [class*='after'] {
+.fm-value-nav svg,
+.fm-value-nav [class*='icon'] {
   flex-shrink: 0;
-}
-
-/* Don't ellipsize the whole head as one blob — only the hint/value */
-.fm-value-row [class*='middle'] > [class*='head'] {
-  text-overflow: clip !important;
 }
 
 /* Entity rows: title + subtitle stay single-line */
