@@ -24,7 +24,7 @@ import { QrPage } from './pages/QrPage.jsx';
 import { HubSkeleton } from './components/HubSkeleton.jsx';
 
 export default function App() {
-  const { tg, platform, appearance, ready } = useTelegramApp();
+  const { tg, appearance, ready } = useTelegramApp();
   const { current, depth, push, pop, reset } = useNavStack({ id: SCREENS.HUB, params: {} });
 
   const [loading, setLoading] = useState(true);
@@ -166,7 +166,7 @@ export default function App() {
   const isQr = current.id === SCREENS.ORG_QR;
 
   return (
-    <AppRoot appearance={appearance} platform={platform === 'ios' ? 'ios' : 'base'}>
+    <AppRoot appearance={appearance} platform="ios">
       {loading ? (
         <HubSkeleton hint={loadingHint} />
       ) : error ? (

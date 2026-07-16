@@ -225,6 +225,15 @@ html[data-tgui-platform='android'] body {
   overflow: hidden;
 }
 
+/* Lock Cell metrics to iOS Settings (kit uses 24px gap on `base` / Desktop) */
+.fm-hub-list [class*='Cell'],
+.fm-page-list [class*='Cell'] {
+  gap: 16px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  --tgui--cell--middle--padding: 12px 0;
+}
+
 /* Kit Section dividers are missing inset styles — restore Settings look */
 .fm-hub-list > section hr,
 .fm-page-list > section hr {

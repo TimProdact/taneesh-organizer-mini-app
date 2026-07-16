@@ -33,12 +33,23 @@ function applyTelegramTheme(webApp) {
   if (tp.secondary_bg_color || tp.header_bg_color) {
     webApp.setHeaderColor(tp.secondary_bg_color || tp.header_bg_color);
   }
-  root.dataset.tguiPlatform = webApp.platform === 'android' ? 'android' : 'ios';
+  /* UI chrome always Settings/iOS — same on phone and desktop */
+  root.dataset.tguiPlatform = 'ios';
+}
+
+function resolveAppearance(webApp) {
+  const scheme = webApp?.colorScheme;
+  if (scheme === 'dark' || scheme === 'light') return scheme;
+  if (typeof window !== 'undefined' && window.matchMedia?.('(prefers-color-scheme: dark)').matches) {
+    return 'dark';
+  }
+  return 'light';
 }
 
 export function useTelegramApp() {
   const [ready, setReady] = useState(false);
   const [tg, setTg] = useState(null);
+  const [appearance, setAppearance] = useState(() => resolveAppearance(null));
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +63,12 @@ export function useTelegramApp() {
         if (webApp.disableVerticalSwipes) webApp.disableVerticalSwipes();
         applyTelegramTheme(webApp);
         setTg(webApp);
+        setAppearance(resolveAppearance(webApp));
+        webApp.onEvent?.('themeChanged', () => {
+          if (!cancelled) setAppearance(resolveAppearance(webApp));
+        });
+      } else {
+        setAppearance(resolveAppearance(null));
       }
       setReady(true);
     };
@@ -75,9 +92,8 @@ export function useTelegramApp() {
     };
   }, []);
 
-  /* Settings-style inset lists: iOS chrome everywhere except Android */
-  const platform = tg?.platform === 'android' ? 'base' : 'ios';
-  const appearance = tg?.colorScheme === 'light' ? 'light' : 'dark';
+  /* Always iOS kit chrome so phone / Desktop / Web look the same */
+  const platform = 'ios';
   const initData = ready ? getInitData() : '';
 
   return { tg, platform, appearance, ready, initData };
