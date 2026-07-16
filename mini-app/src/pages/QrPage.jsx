@@ -1,3 +1,4 @@
+import { Button } from '@telegram-apps/telegram-ui';
 import { Icon20Copy } from '@telegram-apps/telegram-ui/dist/icons/20/copy';
 import { copyText, haptic } from '../api.js';
 import { profileOf, publicPageHost, publicPageUrl } from '../utils.js';
@@ -50,21 +51,19 @@ export function QrPage({ snapshot }) {
               <span>{logoEmoji}</span>
             )}
           </div>
-          <h1 className="fm-qr-title">{displayName}</h1>
+          <h1 className="fm-qr-name">{displayName}</h1>
           <p className="fm-qr-handle">{publicPageHost()}</p>
         </div>
         <div className="fm-qr-frame">
           <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
         </div>
         <div className="fm-qr-actions">
-          <button type="button" className="fm-qr-action" onClick={handleCopy}>
-            <Icon20Copy />
+          <Button mode="outline" size="m" stretched before={<Icon20Copy />} onClick={handleCopy}>
             Копировать
-          </button>
-          <button type="button" className="fm-qr-action" onClick={handleShare}>
-            <ShareIcon />
+          </Button>
+          <Button mode="filled" size="m" stretched before={<ShareIcon />} onClick={handleShare}>
             Поделиться
-          </button>
+          </Button>
         </div>
       </div>
     </main>

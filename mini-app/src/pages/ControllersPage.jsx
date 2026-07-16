@@ -1,9 +1,17 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
+import {
+  Button,
+  Cell,
+  List,
+  Navigation,
+  Placeholder,
+  Section,
+} from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
-import { EntityListRow } from '../components/EntityListRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { AddControllerSheet } from '../components/AddControllerSheet.jsx';
+import { ValueGroup } from '../components/ValueGroup.jsx';
+import { ValueRow } from '../components/ValueRow.jsx';
 import { formatUzMobileMask } from '../utils/uzPhoneMask.js';
 import { haptic, runActionSafe, showError } from '../api.js';
 
@@ -27,12 +35,7 @@ function formatLastLogin(iso) {
   return `${formatAdded(iso)}, ${time}`;
 }
 
-function controllerSubtitle(c) {
-  const phone = formatUzMobileMask(c.phoneNational || c.phone || '');
-  const scans = c.scanCount != null ? ` · ${c.scanCount} скан.` : '';
-  return `${phone}${scans}`;
-}
-
+/** Controllers — fields from admin ControllersTab */
 export function ControllersPage({ snapshot, onSnapshotChange }) {
   const list = snapshot.controllers || [];
   const [addOpen, setAddOpen] = useState(false);
@@ -61,7 +64,7 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
       onSnapshotChange(next);
       setSelectedId(null);
     } catch {
-      /* alert already shown */
+      /* alerted */
     } finally {
       setBusy(false);
     }
@@ -70,25 +73,31 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
   return (
     <SubpageLayout>
       <PageHeader title="Контролеры" subtitle={`${list.length} из ${MAX}`} />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         {list.length > 0 ? (
-          <div className="fm-inset-card fm-entity-list">
-            {list.map((c, index) => (
-              <EntityListRow
+          <Section>
+            {list.map((c) => (
+              <Cell
                 key={c.id}
-                glyph="📷"
-                title={c.name || 'Контролер'}
-                subtitle={controllerSubtitle(c)}
-                last={index === list.length - 1}
+                before={<span className="fm-entity-glyph" aria-hidden>📷</span>}
+                subtitle={formatUzMobileMask(c.phoneNational || c.phone || '')}
+                description={`${c.scanCount ?? 0} сканирований · вход ${formatLastLogin(c.lastLoginAt)}`}
+                after={<Navigation />}
+                multiline
                 onClick={() => {
                   haptic('selection');
                   setSelectedId(c.id);
                 }}
-              />
+              >
+                {c.name || 'Контролер'}
+              </Cell>
             ))}
-          </div>
+          </Section>
         ) : (
-          <p className="fm-empty-hint">Добавляй контролеров по имени и телефону — до {MAX} человек</p>
+          <Placeholder
+            header="Контролеров пока нет"
+            description="Добавляй по имени и телефону (+998) — до 5 человек"
+          />
         )}
 
         <div className="fm-page-cta fm-page-cta--separated">
@@ -102,7 +111,7 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
             + Добавить
           </Button>
         </div>
-      </div>
+      </List>
 
       <AddControllerSheet
         open={addOpen}
@@ -117,26 +126,17 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
         onClose={() => setSelectedId(null)}
       >
         {selected ? (
-          <div className="fm-controller-detail">
-            <div className="fm-controller-stats">
-              <div className="fm-controller-stat">
-                <span className="fm-controller-stat-label">Сканирований</span>
-                <span className="fm-controller-stat-value">{selected.scanCount ?? 0}</span>
-              </div>
-              <div className="fm-controller-stat">
-                <span className="fm-controller-stat-label">Добавлен</span>
-                <span className="fm-controller-stat-value">{formatAdded(selected.addedAt)}</span>
-              </div>
-              <div className="fm-controller-stat">
-                <span className="fm-controller-stat-label">Последний вход</span>
-                <span className="fm-controller-stat-value">{formatLastLogin(selected.lastLoginAt)}</span>
-              </div>
-            </div>
-            <p className="fm-empty-hint">История сканирований появится после первых QR на входе</p>
+          <List>
+            <ValueGroup>
+              <ValueRow label="Сканирований" value={String(selected.scanCount ?? 0)} muted />
+              <ValueRow label="Добавлен" value={formatAdded(selected.addedAt)} muted />
+              <ValueRow label="Последний вход" value={formatLastLogin(selected.lastLoginAt)} muted />
+            </ValueGroup>
+            <p className="fm-empty-hint">История сканирований — после первых QR на входе</p>
             <Button mode="outline" size="l" stretched disabled={busy} onClick={remove}>
               Удалить контролера
             </Button>
-          </div>
+          </List>
         ) : null}
       </BottomSheet>
     </SubpageLayout>

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
@@ -47,7 +48,7 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
   return (
     <SubpageLayout>
       <PageHeader title="Профиль организатора" subtitle="Лого, описание, соцсети" />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         <ValueGroup>
           <ValueRow
             label="Логотип"
@@ -69,10 +70,9 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
             label="Соцсети"
             value={`${socialCount} из ${FIXED_SOCIAL_PLATFORMS.length}`}
             onClick={() => push(SCREENS.SOCIALS)}
-            last
           />
         </ValueGroup>
-      </div>
+      </List>
 
       <FieldSheet
         open={sheet === FIELDS.name}

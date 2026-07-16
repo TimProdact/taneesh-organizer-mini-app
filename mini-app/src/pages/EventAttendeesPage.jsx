@@ -1,5 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Button, Input, SegmentedControl } from '@telegram-apps/telegram-ui';
+import {
+  Button,
+  Input,
+  List,
+  Placeholder,
+  Section,
+  SegmentedControl,
+} from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { EntityListRow } from '../components/EntityListRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
@@ -129,7 +136,7 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
         title="Участники"
         subtitle={`${filtered.length} из ${list.length} · ${event.name || ''}`}
       />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         <Input
           header="Поиск"
           placeholder="Имя или контакт"
@@ -152,23 +159,22 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
         </div>
 
         {filtered.length ? (
-          <div className="fm-inset-card fm-entity-list">
-            {filtered.map((a, index) => (
+          <Section>
+            {filtered.map((a) => (
               <EntityListRow
                 key={a.id}
                 glyph={a.checkIn === 'entered' ? '✅' : '👤'}
                 title={a.name}
                 subtitle={`${typeLabel(event, a.type)} · ${a.contact} · ${checkLabel(a.checkIn)}`}
-                last={index === filtered.length - 1}
-                onClick={() => {
-                  haptic('selection');
-                  setSelectedId(a.id);
-                }}
+                onClick={() => setSelectedId(a.id)}
               />
             ))}
-          </div>
+          </Section>
         ) : (
-          <p className="fm-empty-hint">Пока нет участников по этому фильтру</p>
+          <Placeholder
+            header="Никого нет"
+            description="Пока нет участников по этому фильтру"
+          />
         )}
 
         <div className="fm-page-cta fm-page-cta--separated">
@@ -184,7 +190,7 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
             Пригласить
           </Button>
         </div>
-      </div>
+      </List>
 
       <BottomSheet
         open={inviteOpen}

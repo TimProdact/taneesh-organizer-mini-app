@@ -1,7 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Button, Input, SegmentedControl } from '@telegram-apps/telegram-ui';
+import {
+  Button,
+  Input,
+  List,
+  Placeholder,
+  Section,
+  SegmentedControl,
+} from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { EntityListRow } from '../components/EntityListRow.jsx';
+import { ValueGroup } from '../components/ValueGroup.jsx';
+import { ValueRow } from '../components/ValueRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { formatPrice } from '../utils.js';
 import { copyText, haptic, showError } from '../api.js';
@@ -50,21 +59,12 @@ export function EventSalesPage({ snapshot, eventId }) {
   return (
     <SubpageLayout>
       <PageHeader title="Продажи" subtitle={event.name || ''} />
-      <div className="fm-page-body">
-        <div className="fm-metrics-grid fm-metrics-grid--3">
-          <div className="fm-metric-tile">
-            <span className="fm-metric-value">{paid.length}</span>
-            <span className="fm-metric-label">Всего продаж</span>
-          </div>
-          <div className="fm-metric-tile">
-            <span className="fm-metric-value">{formatPrice(totalRefund)}</span>
-            <span className="fm-metric-label">Возвраты</span>
-          </div>
-          <div className="fm-metric-tile">
-            <span className="fm-metric-value">{formatPrice(payout)}</span>
-            <span className="fm-metric-label">К выплате</span>
-          </div>
-        </div>
+      <List className="fm-page-list">
+        <ValueGroup header="Сводка">
+          <ValueRow label="Всего продаж" value={String(paid.length)} muted />
+          <ValueRow label="Возвраты" value={formatPrice(totalRefund)} muted />
+          <ValueRow label="К выплате" value={formatPrice(payout)} muted />
+        </ValueGroup>
 
         <Input
           header="Поиск"
@@ -92,8 +92,8 @@ export function EventSalesPage({ snapshot, eventId }) {
         </div>
 
         {filtered.length ? (
-          <div className="fm-inset-card fm-entity-list">
-            {filtered.map((s, index) => (
+          <Section>
+            {filtered.map((s) => (
               <EntityListRow
                 key={s.id}
                 glyph={s.status === 'paid' ? '💳' : '↩️'}
@@ -101,18 +101,14 @@ export function EventSalesPage({ snapshot, eventId }) {
                 subtitle={`${formatSaleDate(s.date)} · ${formatPrice(s.amount)} · ${
                   s.status === 'paid' ? 'Оплачено' : 'Возврат'
                 }`}
-                last={index === filtered.length - 1}
-                onClick={() => {
-                  haptic('selection');
-                  setSelectedId(s.id);
-                }}
+                onClick={() => setSelectedId(s.id)}
               />
             ))}
-          </div>
+          </Section>
         ) : (
-          <p className="fm-empty-hint">Продаж пока нет</p>
+          <Placeholder header="Продаж пока нет" description="Появятся после первых оплат" />
         )}
-      </div>
+      </List>
 
       <BottomSheet
         open={Boolean(selected)}

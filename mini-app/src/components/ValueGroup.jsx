@@ -1,7 +1,10 @@
-export function ValueGroup({ children, className = '' }) {
+import { Section } from '@telegram-apps/telegram-ui';
+
+/** Settings block — Telegram UI `Section` */
+export function ValueGroup({ children, className = '', header, footer }) {
   return (
-    <div className={`fm-inset-card fm-value-group ${className}`.trim()}>
+    <Section header={header} footer={footer} className={className || undefined}>
       {children}
-    </div>
+    </Section>
   );
 }

@@ -1,7 +1,7 @@
-import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
-import { Switch } from '@telegram-apps/telegram-ui';
+import { Cell, Navigation, Switch } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
 
+/** Settings row — Telegram UI `Cell` */
 export function ValueRow({
   label,
   value,
@@ -9,26 +9,33 @@ export function ValueRow({
   last = false,
   muted = false,
   leading = null,
+  subtitle,
 }) {
-  const Tag = onClick ? 'button' : 'div';
-
+  void last;
   return (
-    <Tag
-      type={onClick ? 'button' : undefined}
-      className={[
-        'fm-value-row',
-        onClick ? 'fm-value-row--chevron fm-tap' : 'fm-value-row--static',
-        last ? 'fm-value-row--last' : '',
-      ].filter(Boolean).join(' ')}
-      onClick={() => { if (onClick) { haptic('selection'); onClick(); } }}
+    <Cell
+      before={leading || undefined}
+      subtitle={subtitle || undefined}
+      after={
+        onClick ? (
+          <Navigation>
+            <span className={muted ? 'fm-cell-muted' : undefined}>{value}</span>
+          </Navigation>
+        ) : (
+          <span className={`fm-cell-static${muted ? ' fm-cell-muted' : ''}`}>{value}</span>
+        )
+      }
+      onClick={
+        onClick
+          ? () => {
+              haptic('selection');
+              onClick();
+            }
+          : undefined
+      }
     >
-      <span className={`fm-value-row-label${leading ? ' fm-value-row-label--with-leading' : ''}`}>
-        {leading ? <span className="fm-value-row-leading">{leading}</span> : null}
-        {label}
-      </span>
-      <span className={`fm-value-row-value${muted ? ' fm-value-row-value--muted' : ''}`}>{value}</span>
-      {onClick ? <Icon24ChevronRight className="fm-value-row-chevron" /> : null}
-    </Tag>
+      {label}
+    </Cell>
   );
 }
 
@@ -41,16 +48,19 @@ export function StepperRow({
   incrementDisabled = false,
   last = false,
 }) {
+  void last;
   return (
-    <div className={`fm-value-row fm-value-row--control${last ? ' fm-value-row--last' : ''}`}>
-      <span className="fm-value-row-label">{label}</span>
-      <div className="fm-value-row-control">
+    <Cell
+      after={(
         <div className="fm-stepper fm-stepper--compact">
           <button
             type="button"
             className="fm-stepper-btn"
             disabled={decrementDisabled}
-            onClick={onDecrement}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDecrement?.();
+            }}
           >
             −
           </button>
@@ -59,31 +69,36 @@ export function StepperRow({
             type="button"
             className="fm-stepper-btn"
             disabled={incrementDisabled}
-            onClick={onIncrement}
+            onClick={(e) => {
+              e.stopPropagation();
+              onIncrement?.();
+            }}
           >
             +
           </button>
         </div>
-      </div>
-    </div>
+      )}
+    >
+      {label}
+    </Cell>
   );
 }
 
 export function SwitchRow({ label, checked, onChange, last = false }) {
+  void last;
   return (
-    <div className={`fm-value-row fm-value-row--control fm-value-row--switch${last ? ' fm-value-row--last' : ''}`}>
-      <span className="fm-value-row-label">{label}</span>
-      <div className="fm-value-row-control">
+    <Cell
+      after={(
         <Switch
-          className="fm-switch-compact"
           checked={checked}
           onChange={(e) => {
             haptic('selection');
-            const next = typeof e === 'boolean' ? e : e?.target?.checked;
-            onChange?.(next);
+            onChange?.(e.target.checked);
           }}
         />
-      </div>
-    </div>
+      )}
+    >
+      {label}
+    </Cell>
   );
 }

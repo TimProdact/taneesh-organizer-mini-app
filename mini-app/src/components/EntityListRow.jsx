@@ -1,6 +1,7 @@
-import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
+import { Cell, Navigation } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
 
+/** Entity list row — Telegram UI `Cell` */
 export function EntityListRow({
   glyph,
   title,
@@ -8,20 +9,22 @@ export function EntityListRow({
   onClick,
   last = false,
 }) {
+  void last;
   return (
-    <button
-      type="button"
-      className={`fm-entity-row fm-tap${last ? ' fm-entity-row--last' : ''}`}
-      onClick={() => { haptic('selection'); onClick?.(); }}
+    <Cell
+      before={glyph ? <span className="fm-entity-glyph" aria-hidden>{glyph}</span> : undefined}
+      subtitle={subtitle || undefined}
+      after={<Navigation />}
+      onClick={
+        onClick
+          ? () => {
+              haptic('selection');
+              onClick();
+            }
+          : undefined
+      }
     >
-      <div className="fm-entity-row-copy">
-        <span className="fm-entity-row-title">
-          {glyph ? <span className="fm-entity-row-glyph" aria-hidden>{glyph}</span> : null}
-          {title}
-        </span>
-        {subtitle ? <span className="fm-entity-row-sub">{subtitle}</span> : null}
-      </div>
-      <Icon24ChevronRight className="fm-entity-row-chevron" />
-    </button>
+      {title}
+    </Cell>
   );
 }

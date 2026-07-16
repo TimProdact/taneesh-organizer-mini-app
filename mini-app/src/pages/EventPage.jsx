@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
+import { Button, IconButton, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow, SwitchRow } from '../components/ValueRow.jsx';
@@ -94,18 +94,18 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
         title={event.name || 'Мероприятие'}
         subtitle={status}
         trailing={(
-          <button
-            type="button"
-            className="fm-page-more"
+          <IconButton
+            mode="bezeled"
+            size="s"
             aria-label="Ещё"
             onClick={() => { haptic('selection'); setMenuOpen(true); }}
           >
             ⋯
-          </button>
+          </IconButton>
         )}
       />
 
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         {cover ? (
           <div className="fm-event-hero">
             <img src={cover} alt="" className="fm-event-hero-img" />
@@ -118,7 +118,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           </div>
         )}
 
-        <ValueGroup className="fm-value-group--spaced">
+        <ValueGroup header="О событии">
           <ValueRow
             label="Название"
             value={event.name || '—'}
@@ -152,36 +152,31 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
               setInterestsOpen(true);
             }}
           />
-          <ValueRow label="Вход" value={eventEntryLabel(event)} muted last />
+          <ValueRow label="Вход" value={eventEntryLabel(event)} muted />
         </ValueGroup>
 
         {!event.isFree && (event.tickets || []).length ? (
-          <ValueGroup className="fm-value-group--spaced">
-            {(event.tickets || []).map((t, i) => (
+          <ValueGroup header="Типы билетов">
+            {(event.tickets || []).map((t) => (
               <ValueRow
                 key={t.id}
-                label={t.name || `Билет ${i + 1}`}
+                label={t.name || 'Билет'}
                 value={`${formatPrice(t.price)} · ${t.sold || 0}/${t.capacity}${
                   t.discountLabel ? ` · ${t.discountLabel}` : ''
                 }`}
                 muted
-                last={i === event.tickets.length - 1}
               />
             ))}
           </ValueGroup>
         ) : null}
 
-        <p className="fm-section-label">Метрики</p>
-        <div className="fm-metrics-grid">
+        <ValueGroup header="Метрики">
           {metrics.map((row) => (
-            <div key={row.label} className="fm-metric-tile">
-              <span className="fm-metric-value">{row.value}</span>
-              <span className="fm-metric-label">{row.label}</span>
-            </div>
+            <ValueRow key={row.label} label={row.label} value={row.value} muted />
           ))}
-        </div>
+        </ValueGroup>
 
-        <ValueGroup className="fm-value-group--spaced">
+        <ValueGroup header="Управление">
           <SwitchRow
             label="Активировать"
             checked={!event.paused}
@@ -191,19 +186,17 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
             label="Скрыть"
             checked={event.visible === false}
             onChange={(hidden) => act('set_event_visible', { visible: !hidden })}
-            last={event.status !== 'draft'}
           />
           {event.status === 'draft' ? (
             <ValueRow
               label="Публикация"
               value="Опубликовать"
               onClick={() => act('publish_event')}
-              last
             />
           ) : null}
         </ValueGroup>
 
-        <MenuGroup>
+        <MenuGroup header="Разделы">
           <MenuRow
             label="Участники"
             glyph="👥"
@@ -225,7 +218,6 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
             glyph="🔗"
             tone="#007aff"
             onClick={() => { haptic('selection'); setShareOpen(true); }}
-            last
           />
         </MenuGroup>
 
@@ -234,7 +226,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
             {previewLabel}
           </Button>
         </div>
-      </div>
+      </List>
 
       <BottomSheet open={menuOpen} title="Действия" onClose={() => setMenuOpen(false)}>
         <div className="fm-action-list">

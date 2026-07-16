@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
@@ -75,15 +76,15 @@ export function SocialsPage({ snapshot, onSnapshotChange }) {
   return (
     <SubpageLayout>
       <PageHeader title="Ссылки" subtitle={`${filledCount} из ${FIXED_SOCIAL_PLATFORMS.length}`} />
-      <div className="fm-page-body">
-        {links.map((link, index) => {
+      <List className="fm-page-list">
+        {links.map((link) => {
           const summary = linkValueSummary(link);
           const label = PLATFORM_LABELS[link.platform] || link.platform;
 
           return (
-            <ValueGroup key={link.platform} className={index === 0 ? '' : 'fm-value-group--spaced'}>
+            <ValueGroup key={link.platform} header={label}>
               <ValueRow
-                label={label}
+                label="URL"
                 value={summary.text}
                 muted={summary.muted}
                 leading={<PlatformIcon platform={link.platform} />}
@@ -93,12 +94,11 @@ export function SocialsPage({ snapshot, onSnapshotChange }) {
                 label="На странице"
                 checked={link.visible !== false}
                 onChange={(checked) => toggleVisible(link.platform, checked)}
-                last
               />
             </ValueGroup>
           );
         })}
-      </div>
+      </List>
 
       <FieldSheet
         open={Boolean(sheetPlatform)}

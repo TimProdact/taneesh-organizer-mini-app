@@ -1,7 +1,8 @@
+import { Cell, List, Navigation, Section } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
-import { EntityListRow } from '../components/EntityListRow.jsx';
 import { haptic } from '../api.js';
 
+/** Legal documents — admin LegalDocumentsPanel labels */
 const DOCS = [
   {
     id: 'offer',
@@ -34,20 +35,21 @@ export function DocumentsPage() {
   return (
     <SubpageLayout>
       <PageHeader title="Документы" subtitle="Юридические материалы" />
-      <div className="fm-page-body">
-        <div className="fm-inset-card fm-entity-list">
-          {DOCS.map((doc, index) => (
-            <EntityListRow
+      <List className="fm-page-list">
+        <Section>
+          {DOCS.map((doc) => (
+            <Cell
               key={doc.id}
-              glyph="📄"
-              title={doc.title}
+              before={<span className="fm-entity-glyph" aria-hidden>📄</span>}
               subtitle={doc.subtitle}
-              last={index === DOCS.length - 1}
+              after={<Navigation />}
               onClick={() => open(doc.url)}
-            />
+            >
+              {doc.title}
+            </Cell>
           ))}
-        </div>
-      </div>
+        </Section>
+      </List>
     </SubpageLayout>
   );
 }

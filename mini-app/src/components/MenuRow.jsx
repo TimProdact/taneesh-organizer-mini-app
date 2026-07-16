@@ -1,40 +1,44 @@
-import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
+import { Cell, Navigation, Section } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
 
-export function MenuGroup({ children }) {
-  return <div className="fm-inset-card fm-menu-group">{children}</div>;
+export function MenuGroup({ children, header, footer }) {
+  return (
+    <Section header={header} footer={footer}>
+      {children}
+    </Section>
+  );
 }
 
 export function MenuRow({
   label,
   value,
   badge,
-  tone = 'blue',
+  tone = '#007aff',
   glyph,
   onClick,
   last = false,
 }) {
+  void last;
   return (
-    <button
-      type="button"
-      className={`fm-menu-row fm-tap${last ? ' fm-menu-row--last' : ''}`}
-      onClick={() => { haptic('selection'); onClick?.(); }}
+    <Cell
+      before={
+        glyph ? (
+          <span className="fm-hub-cell-icon" style={{ backgroundColor: tone }} aria-hidden>
+            {glyph}
+          </span>
+        ) : undefined
+      }
+      after={(
+        <Navigation>
+          {badge != null && badge > 0 ? badge : value}
+        </Navigation>
+      )}
+      onClick={() => {
+        haptic('selection');
+        onClick?.();
+      }}
     >
-      <span className="fm-menu-icon-wrap">
-        <span className="fm-menu-glyph" style={{ backgroundColor: tone }} aria-hidden>{glyph}</span>
-      </span>
-      <span className="fm-menu-label">
-        {label}
-        {badge != null && badge > 0 ? (
-          <span className="fm-menu-badge" aria-label={`${badge} новых`}>{badge}</span>
-        ) : null}
-      </span>
-      <span className="fm-menu-trail">
-        {value != null && value !== '' ? (
-          <span className="fm-menu-value">{value}</span>
-        ) : null}
-        <Icon24ChevronRight className="fm-menu-chevron" />
-      </span>
-    </button>
+      {label}
+    </Cell>
   );
 }

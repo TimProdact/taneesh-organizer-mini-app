@@ -1,38 +1,75 @@
+import { Banner, Button, List, Placeholder } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow } from '../components/ValueRow.jsx';
 import { formatPrice } from '../utils.js';
+import { haptic } from '../api.js';
+import { SCREENS } from '../navigation/screens.js';
 
-export function FinancePage({ snapshot }) {
+/**
+ * Finance — admin LegalTab «Выплаты».
+ * Без approved KYC выплаты недоступны (как в админке).
+ */
+export function FinancePage({ snapshot, push }) {
   const finance = snapshot.finance || {};
   const hold = finance.hold ?? 0;
   const paid = finance.totalPaid ?? 0;
   const history = finance.history || [];
+  const kyc =
+    snapshot.profile?.kycStatus
+    || (snapshot.profile?.verified ? 'approved' : 'idle');
+  const verified = kyc === 'approved';
 
   return (
     <SubpageLayout>
       <PageHeader title="Финансы" subtitle="Выплаты и реквизиты" />
-      <div className="fm-page-body">
-        <ValueGroup>
+      <List className="fm-page-list">
+        {!verified ? (
+          <Banner
+            type="section"
+            header="Нужна верификация"
+            description="Для просмотра выплат необходимо пройти верификацию во вкладке «Реквизиты»."
+          >
+            <Button
+              size="s"
+              mode="filled"
+              onClick={() => {
+                haptic('selection');
+                push?.(SCREENS.KYC);
+              }}
+            >
+              Реквизиты
+            </Button>
+          </Banner>
+        ) : null}
+
+        <ValueGroup header="Сводка">
           <ValueRow label="В ожидании (Hold)" value={formatPrice(hold)} muted />
-          <ValueRow label="Всего выплачено" value={formatPrice(paid)} last />
+          <ValueRow label="Всего выплачено" value={formatPrice(paid)} muted />
         </ValueGroup>
 
-        {history.length > 0 ? (
-          <ValueGroup className="fm-value-group--spaced">
-            {history.map((row, i) => (
+        {verified && history.length > 0 ? (
+          <ValueGroup header="История выплат">
+            {history.map((row) => (
               <ValueRow
-                key={row.id || i}
+                key={row.id}
                 label={row.title || 'Выплата'}
                 value={formatPrice(row.amount)}
-                last={i === history.length - 1}
+                muted
               />
             ))}
           </ValueGroup>
         ) : (
-          <p className="fm-empty-hint">История выплат появится после верификации и первых продаж</p>
+          <Placeholder
+            header="История пуста"
+            description={
+              verified
+                ? 'Появится после первых выплат'
+                : 'Сначала подтвердите реквизиты'
+            }
+          />
         )}
-      </div>
+      </List>
     </SubpageLayout>
   );
 }

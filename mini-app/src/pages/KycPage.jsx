@@ -1,26 +1,28 @@
+import { Banner, Button, List, Placeholder } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
-import { Button } from '@telegram-apps/telegram-ui';
-import { haptic, runActionSafe, showError } from '../api.js';
+import { runActionSafe, showError } from '../api.js';
 
+/** Copy from admin LegalRequisitesPanel */
 const COPY = {
   idle: {
-    title: 'KYC не пройден',
-    body: 'Подтвердите данные компании или самозанятого, чтобы создавать платные события и получать выплаты.',
+    header: 'Требуется верификация',
+    description:
+      'Для создания платных событий и получения выплат необходимо подтвердить личность или данные компании.',
     cta: 'Пройти верификацию',
   },
   pending: {
-    title: 'KYC на проверке',
-    body: 'Заявка у модератора. Обычно проверка занимает до 24 часов.',
+    header: 'На проверке',
+    description: 'Ваши данные находятся на проверке у администратора. Обычно это занимает до 24 часов.',
     cta: null,
   },
   rejected: {
-    title: 'KYC отклонён',
-    body: 'Исправьте данные и отправьте заявку снова.',
+    header: 'Верификация отклонена',
+    description: 'Исправьте ошибки и отправьте заявку повторно.',
     cta: 'Исправить',
   },
   approved: {
-    title: 'KYC пройден',
-    body: 'Аккаунт подтверждён. Доступны платные события и выплаты.',
+    header: 'Верификация пройдена',
+    description: 'Аккаунт подтверждён. Можно создавать платные события и выводить средства.',
     cta: null,
   },
 };
@@ -31,7 +33,6 @@ export function KycPage({ snapshot, onSnapshotChange }) {
 
   const submit = async () => {
     try {
-      haptic('success');
       const next = await runActionSafe('submit_kyc', {});
       onSnapshotChange(next);
     } catch (e) {
@@ -41,25 +42,22 @@ export function KycPage({ snapshot, onSnapshotChange }) {
 
   return (
     <SubpageLayout>
-      <PageHeader title="Верификация" subtitle="KYC" />
-      <div className="fm-page-body">
-        <div className={`fm-kyc-card fm-kyc-card--${status}`}>
-          <p className="fm-kyc-card-title">{copy.title}</p>
-          <p className="fm-kyc-card-body">{copy.body}</p>
-        </div>
-        {copy.cta ? (
-          <div className="fm-page-cta fm-page-cta--separated">
-            <Button mode="filled" size="l" stretched onClick={submit}>
+      <PageHeader title="Реквизиты" subtitle="Верификация KYC" />
+      <List className="fm-page-list">
+        <Banner type="section" header={copy.header} description={copy.description}>
+          {copy.cta ? (
+            <Button size="s" mode="filled" onClick={submit}>
               {copy.cta}
             </Button>
-          </div>
-        ) : null}
+          ) : null}
+        </Banner>
         {status === 'idle' || status === 'rejected' ? (
-          <p className="fm-empty-hint">
-            Полная форма (ИП / ООО / самозанятый + документы) подключим к API Taneesh.
-          </p>
+          <Placeholder
+            header="Форма ИП / ООО / самозанятый"
+            description="Полная анкета и загрузка документов — как в веб-админке; подключим к API Taneesh."
+          />
         ) : null}
-      </div>
+      </List>
     </SubpageLayout>
   );
 }
