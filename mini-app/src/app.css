@@ -2549,3 +2549,164 @@ button.fm-value-row {
   font-weight: 600;
   color: var(--tg-theme-text-color);
 }
+
+/* —— DateTime picker (Telegram-style, no repeat) —— */
+.fm-sheet-panel--datetime {
+  max-height: min(92vh, 640px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px 16px 0 0;
+  background: var(--tg-theme-secondary-bg-color, #1c1c1e);
+}
+
+.fm-dt-header {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  padding: 8px 8px 4px;
+}
+
+.fm-dt-title {
+  text-align: center;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--tg-theme-text-color);
+}
+
+.fm-dt-icon-btn {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--tg-theme-hint-color);
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.fm-dt-icon-btn--ghost {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.fm-dt-body {
+  padding: 4px 16px 8px;
+  overflow: auto;
+  flex: 1;
+}
+
+.fm-dt-month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.fm-dt-month-label {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--tg-theme-link-color, #007aff);
+}
+
+.fm-dt-month-nav {
+  display: flex;
+  gap: 4px;
+}
+
+.fm-dt-nav-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--tg-theme-link-color, #007aff);
+  font-size: 1.4rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.fm-dt-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+
+.fm-dt-weekday {
+  text-align: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--tg-theme-hint-color);
+  letter-spacing: 0.02em;
+}
+
+.fm-dt-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px 0;
+  margin-bottom: 16px;
+}
+
+.fm-dt-day {
+  aspect-ratio: 1;
+  max-width: 44px;
+  width: 100%;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--tg-theme-text-color);
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.fm-dt-day--empty {
+  pointer-events: none;
+}
+
+.fm-dt-day--selected {
+  background: var(--tg-theme-button-color, #007aff);
+  color: var(--tg-theme-button-text-color, #fff);
+  font-weight: 600;
+}
+
+.fm-dt-rows {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--tg-theme-section-bg-color, #2c2c2e) 100%, transparent);
+  overflow: hidden;
+}
+
+.fm-dt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.fm-dt-row-label {
+  font-size: 1rem;
+  color: var(--tg-theme-text-color);
+}
+
+.fm-dt-time-pill {
+  min-width: 72px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 18%, transparent);
+  color: var(--tg-theme-text-color);
+  font-size: 1rem;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.fm-dt-time-pill::-webkit-calendar-picker-indicator {
+  opacity: 0.35;
+}
+
+.fm-dt-footer {
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+}

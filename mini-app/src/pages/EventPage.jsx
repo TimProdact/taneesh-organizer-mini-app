@@ -1,34 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
-import { BottomSheet } from '../components/BottomSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow, StepperRow, SwitchRow } from '../components/ValueRow.jsx';
-import { formatEventDateOnly, formatEventTimeOnly, phaseLabel, publicPageUrl } from '../utils.js';
+import { DateTimePickerSheet, formatEventDateTime } from '../components/DateTimePickerSheet.jsx';
+import { phaseLabel, publicPageUrl } from '../utils.js';
 import { haptic, runActionSafe } from '../api.js';
-
-function toDateValue(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function toTimeValue(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function mergeDateTime(iso, datePart, timePart) {
-  const base = iso ? new Date(iso) : new Date();
-  const [y, m, d] = datePart.split('-').map(Number);
-  const [hh, mm] = timePart.split(':').map(Number);
-  base.setFullYear(y, m - 1, d);
-  base.setHours(hh, mm, 0, 0);
-  return base.toISOString();
-}
 
 export function EventPage({ snapshot, onSnapshotChange, eventId }) {
   const event = useMemo(() => {
@@ -36,9 +13,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
     return list.find((e) => e.id === eventId) || list[0] || {};
   }, [snapshot, eventId]);
 
-  const [sheet, setSheet] = useState(null);
-  const [dateDraft, setDateDraft] = useState('');
-  const [timeDraft, setTimeDraft] = useState('');
+  const [picker, setPicker] = useState(null); // 'start' | 'end' | null
   const [busy, setBusy] = useState(false);
 
   const act = async (adminAction, payload = {}) => {
@@ -55,6 +30,12 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
   const left = event.ticketsLeft ?? 0;
   const total = event.ticketsTotal ?? 0;
 
+  const defaultEnd = () => {
+    if (event.endsAt) return event.endsAt;
+    if (!event.startsAt) return new Date(Date.now() + 3 * 3600_000).toISOString();
+    return new Date(new Date(event.startsAt).getTime() + 3 * 3600_000).toISOString();
+  };
+
   return (
     <SubpageLayout>
       <PageHeader title="Мероприятие" subtitle={event.name || 'Без названия'} />
@@ -62,14 +43,14 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
         <ValueGroup>
           <ValueRow label="Статус" value={phaseLabel(event.phase, event.paused)} muted />
           <ValueRow
-            label="Дата"
-            value={formatEventDateOnly(event.startsAt)}
-            onClick={() => { setDateDraft(toDateValue(event.startsAt)); setSheet('date'); }}
+            label="Начало"
+            value={formatEventDateTime(event.startsAt)}
+            onClick={() => setPicker('start')}
           />
           <ValueRow
-            label="Время"
-            value={formatEventTimeOnly(event.startsAt)}
-            onClick={() => { setTimeDraft(toTimeValue(event.startsAt)); setSheet('time'); }}
+            label="Конец"
+            value={formatEventDateTime(event.endsAt || defaultEnd())}
+            onClick={() => setPicker('end')}
           />
           <StepperRow
             label="Билеты"
@@ -114,43 +95,29 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
         </div>
       </div>
 
-      <BottomSheet open={sheet === 'date'} title="Дата" onClose={() => setSheet(null)}>
-        <div className="fm-field-sheet">
-          <input type="date" className="fm-field-sheet-input fm-field-sheet-input--picker" value={dateDraft} onChange={(e) => setDateDraft(e.target.value)} />
-          <Button
-            mode="filled"
-            size="l"
-            stretched
-            disabled={busy || !dateDraft}
-            onClick={async () => {
-              const time = toTimeValue(event.startsAt) || '20:00';
-              await act('set_starts_at', { startsAt: mergeDateTime(event.startsAt, dateDraft, time) });
-              setSheet(null);
-            }}
-          >
-            Готово
-          </Button>
-        </div>
-      </BottomSheet>
+      <DateTimePickerSheet
+        open={picker === 'start'}
+        title="Начало"
+        valueIso={event.startsAt}
+        busy={busy}
+        onClose={() => setPicker(null)}
+        onSave={async (iso) => {
+          await act('set_starts_at', { startsAt: iso });
+          setPicker(null);
+        }}
+      />
 
-      <BottomSheet open={sheet === 'time'} title="Время" onClose={() => setSheet(null)}>
-        <div className="fm-field-sheet">
-          <input type="time" className="fm-field-sheet-input fm-field-sheet-input--picker" value={timeDraft} onChange={(e) => setTimeDraft(e.target.value)} />
-          <Button
-            mode="filled"
-            size="l"
-            stretched
-            disabled={busy || !timeDraft}
-            onClick={async () => {
-              const date = toDateValue(event.startsAt) || toDateValue(new Date().toISOString());
-              await act('set_starts_at', { startsAt: mergeDateTime(event.startsAt, date, timeDraft) });
-              setSheet(null);
-            }}
-          >
-            Готово
-          </Button>
-        </div>
-      </BottomSheet>
+      <DateTimePickerSheet
+        open={picker === 'end'}
+        title="Конец"
+        valueIso={event.endsAt || defaultEnd()}
+        busy={busy}
+        onClose={() => setPicker(null)}
+        onSave={async (iso) => {
+          await act('set_ends_at', { endsAt: iso });
+          setPicker(null);
+        }}
+      />
     </SubpageLayout>
   );
 }

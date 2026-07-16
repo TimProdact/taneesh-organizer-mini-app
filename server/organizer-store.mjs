@@ -124,13 +124,16 @@ export function getSnapshot() {
 
 function defaultStore() {
   const now = Date.now();
+  const startsAt = new Date(now + 86_400_000).toISOString();
+  const endsAt = new Date(now + 86_400_000 + 3 * 3600_000).toISOString();
   const events = [
     {
       id: 'evt-demo-1',
       name: 'Demo Event',
       ticketsLeft: 40,
       ticketsTotal: 100,
-      startsAt: new Date(now + 86_400_000).toISOString(),
+      startsAt,
+      endsAt,
       paused: false,
       phase: 'upcoming',
       visible: true,
@@ -172,12 +175,17 @@ function refreshMeta() {
 export async function runAction(adminAction, payload = {}) {
   if (adminAction === 'create_event') {
     const capacity = Math.max(1, Number(payload.capacity) || 100);
+    const startsAt = payload.startsAt || new Date().toISOString();
+    const endsAt =
+      payload.endsAt ||
+      new Date(new Date(startsAt).getTime() + 3 * 3600_000).toISOString();
     store.events.push({
       id: `evt-${Date.now()}`,
       name: String(payload.name || 'Мероприятие').trim(),
       ticketsLeft: capacity,
       ticketsTotal: capacity,
-      startsAt: payload.startsAt || new Date().toISOString(),
+      startsAt,
+      endsAt,
       paused: false,
       phase: 'upcoming',
       visible: true,
@@ -188,6 +196,7 @@ export async function runAction(adminAction, payload = {}) {
 
   if (
     adminAction === 'set_starts_at' ||
+    adminAction === 'set_ends_at' ||
     adminAction === 'set_tickets_left' ||
     adminAction === 'set_paused' ||
     adminAction === 'set_event_visible'
@@ -195,6 +204,7 @@ export async function runAction(adminAction, payload = {}) {
     const event = store.events.find((e) => e.id === payload.eventId);
     if (event) {
       if (payload.startsAt != null) event.startsAt = payload.startsAt;
+      if (payload.endsAt != null) event.endsAt = payload.endsAt;
       if (payload.ticketsLeft != null) event.ticketsLeft = payload.ticketsLeft;
       if (payload.paused != null) event.paused = payload.paused;
       if (payload.visible != null) event.visible = payload.visible;
