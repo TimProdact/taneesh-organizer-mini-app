@@ -1,15 +1,27 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { StickyPageCta } from '../components/StickyPageCta.jsx';
-import { FieldSheet } from '../components/FieldSheet.jsx';
-import { haptic, runActionSafe } from '../api.js';
+import { haptic, runActionSafe, showError } from '../api.js';
 import { profileOf } from '../utils.js';
+
+function readPhotoAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file?.type?.startsWith('image/')) {
+      reject(new Error('Нужен файл изображения'));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.readAsDataURL(file);
+  });
+}
 
 export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
   const profile = profileOf(snapshot);
-  const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
+  const fileRef = useRef(null);
   const photoPreview = profile.avatarUrl || profile.logoUrl || '';
 
   const save = async (patch) => {
@@ -25,11 +37,12 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
     }
   };
 
-  const saveUrl = async (raw) => {
-    const avatarUrl = raw.trim();
-    if (!avatarUrl) throw new Error('Введите ссылку');
-    await save({ avatarUrl, logoEmoji: '' });
-    setSheet(false);
+  const pickFile = (files) => {
+    const file = Array.from(files || [])[0];
+    if (!file) return;
+    readPhotoAsDataUrl(file)
+      .then((avatarUrl) => save({ avatarUrl, logoEmoji: '' }))
+      .catch((e) => showError(e.message || 'Ошибка загрузки'));
   };
 
   return (
@@ -46,23 +59,33 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
           </div>
         </div>
 
-        <p className="fm-media-hint">Ссылка на фото логотипа</p>
+        <p className="fm-media-hint">Фото логотипа с устройства</p>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => {
+            pickFile(e.target.files);
+            e.target.value = '';
+          }}
+        />
       </List>
 
       <StickyPageCta>
-        <Button mode="filled" size="l" stretched disabled={busy} onClick={() => setSheet(true)}>
-          {photoPreview ? 'Заменить фото' : 'Указать ссылку на фото'}
+        <Button
+          mode="filled"
+          size="l"
+          stretched
+          disabled={busy}
+          onClick={() => {
+            haptic('selection');
+            fileRef.current?.click();
+          }}
+        >
+          {photoPreview ? 'Заменить фото' : 'Загрузить фото'}
         </Button>
       </StickyPageCta>
-
-      <FieldSheet
-        open={sheet}
-        title="Ссылка на фото"
-        value={profile.avatarUrl || ''}
-        placeholder="https://..."
-        onClose={() => setSheet(false)}
-        onSave={saveUrl}
-      />
     </SubpageLayout>
   );
 }
