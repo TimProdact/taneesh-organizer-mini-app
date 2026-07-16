@@ -10,7 +10,7 @@ export function SettingsPage() {
 
   return (
     <SubpageLayout>
-      <PageHeader title="Настройки" subtitle="THE4 Admin" />
+      <PageHeader title="Настройки" subtitle="Taneesh Organizer" />
       <InsetSection>
         <List>
           <Section header="ССЫЛКИ">
@@ -20,7 +20,7 @@ export function SettingsPage() {
                 if (tg?.openLink) tg.openLink(url);
                 else window.open(url, '_blank');
               }}
-              subtitle="Витрина"
+              subtitle="Публичная страница"
             >
               taneesh-organizer-api.onrender.com
             </Cell>

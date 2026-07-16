@@ -53,7 +53,7 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
 
   return (
     <SubpageLayout>
-      <PageHeader title="Настройки магазина" subtitle="Лого, описание, соцсети" />
+      <PageHeader title="Профиль организатора" subtitle="Лого, описание, соцсети" />
       <div className="fm-page-body">
         <div className="fm-storefront-hero">
           <div className="fm-storefront-hero-preview" aria-hidden>

@@ -36,7 +36,7 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
 
   return (
     <SubpageLayout>
-      <PageHeader title="Логотип" subtitle="Фото для витрины" />
+      <PageHeader title="Логотип" subtitle="Фото профиля" />
       <div className="fm-page-body">
         <div className="fm-storefront-hero">
           <div className="fm-storefront-hero-preview" aria-hidden>

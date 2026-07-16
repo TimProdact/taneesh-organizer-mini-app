@@ -90,7 +90,7 @@ export function SocialsPage({ snapshot, onSnapshotChange }) {
                 onClick={() => setSheetPlatform(link.platform)}
               />
               <SwitchRow
-                label="На витрине"
+                label="На странице"
                 checked={link.visible !== false}
                 onChange={(checked) => toggleVisible(link.platform, checked)}
                 last

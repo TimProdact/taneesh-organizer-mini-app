@@ -31,9 +31,9 @@ function mergeDateTime(iso, datePart, timePart) {
 }
 
 export function DropPage({ snapshot, onSnapshotChange, dropId }) {
-  const drop = useMemo(() => {
-    const list = snapshot.drops || [];
-    return list.find((d) => d.id === dropId) || list[0] || snapshot;
+  const event = useMemo(() => {
+    const list = snapshot.events || snapshot.drops || [];
+    return list.find((d) => d.id === dropId) || list[0] || {};
   }, [snapshot, dropId]);
 
   const [sheet, setSheet] = useState(null);
@@ -45,7 +45,7 @@ export function DropPage({ snapshot, onSnapshotChange, dropId }) {
     if (busy) return;
     setBusy(true);
     try {
-      const next = await runActionSafe(adminAction, { dropId: drop.id, ...payload });
+      const next = await runActionSafe(adminAction, { dropId: event.id, eventId: event.id, ...payload });
       onSnapshotChange(next);
     } finally {
       setBusy(false);
@@ -53,53 +53,53 @@ export function DropPage({ snapshot, onSnapshotChange, dropId }) {
   };
 
   const openDate = () => {
-    setDateDraft(toDateValue(drop.startsAt));
+    setDateDraft(toDateValue(event.startsAt));
     setSheet('date');
   };
 
   const openTime = () => {
-    setTimeDraft(toTimeValue(drop.startsAt));
+    setTimeDraft(toTimeValue(event.startsAt));
     setSheet('time');
   };
 
   const saveDate = async () => {
-    const time = toTimeValue(drop.startsAt) || '20:00';
-    await act('set_starts_at', { startsAt: mergeDateTime(drop.startsAt, dateDraft, time) });
+    const time = toTimeValue(event.startsAt) || '20:00';
+    await act('set_starts_at', { startsAt: mergeDateTime(event.startsAt, dateDraft, time) });
     setSheet(null);
   };
 
   const saveTime = async () => {
-    const date = toDateValue(drop.startsAt) || toDateValue(new Date().toISOString());
-    await act('set_starts_at', { startsAt: mergeDateTime(drop.startsAt, date, timeDraft) });
+    const date = toDateValue(event.startsAt) || toDateValue(new Date().toISOString());
+    await act('set_starts_at', { startsAt: mergeDateTime(event.startsAt, date, timeDraft) });
     setSheet(null);
   };
 
   const bumpStock = (delta) => {
-    const next = Math.max(0, Math.min(drop.totalStock, drop.stock + delta));
+    const next = Math.max(0, Math.min(event.totalStock, (event.stock ?? 0) + delta));
     act('set_stock', { stock: next });
   };
 
-  const openVitrina = () => {
+  const openPage = () => {
     haptic('light');
     const tg = window.Telegram?.WebApp;
-    const url = `${vitrinaUrl()}?drop=${drop.id}`;
+    const url = `${vitrinaUrl()}?event=${event.id}`;
     if (tg?.openLink) tg.openLink(url);
     else window.open(url, '_blank', 'noopener');
   };
 
   return (
     <SubpageLayout>
-      <PageHeader title="Дроп" subtitle={drop.productName || drop.product?.name || 'Продажа'} />
+      <PageHeader title="Мероприятие" subtitle={event.name || 'Без названия'} />
       <div className="fm-page-body">
         <ValueGroup>
-          <ValueRow label="Статус" value={phaseLabel(drop.phase, drop.paused)} muted />
-          <ValueRow label="Дата старта" value={formatDropDateOnly(drop.startsAt)} onClick={openDate} />
-          <ValueRow label="Время старта" value={formatDropTimeOnly(drop.startsAt)} onClick={openTime} />
+          <ValueRow label="Статус" value={phaseLabel(event.phase, event.paused)} muted />
+          <ValueRow label="Дата" value={formatDropDateOnly(event.startsAt)} onClick={openDate} />
+          <ValueRow label="Время" value={formatDropTimeOnly(event.startsAt)} onClick={openTime} />
           <StepperRow
-            label="В наличии"
-            value={`${drop.stock} шт`}
-            decrementDisabled={busy || drop.stock <= 0}
-            incrementDisabled={busy || drop.stock >= drop.totalStock}
+            label="Билеты"
+            value={`${event.stock ?? 0} / ${event.totalStock ?? 0}`}
+            decrementDisabled={busy || (event.stock ?? 0) <= 0}
+            incrementDisabled={busy || (event.stock ?? 0) >= (event.totalStock ?? 0)}
             onDecrement={() => bumpStock(-1)}
             onIncrement={() => bumpStock(1)}
             last
@@ -109,32 +109,32 @@ export function DropPage({ snapshot, onSnapshotChange, dropId }) {
         <ValueGroup className="fm-value-group--spaced">
           <SwitchRow
             label="Активировать"
-            checked={!drop.paused}
+            checked={!event.paused}
             onChange={(active) => act('set_paused', { paused: !active })}
           />
           <SwitchRow
             label="Скрыть"
-            checked={drop.visible === false}
-            onChange={(hidden) => act('set_drop_visible', { visible: !hidden })}
+            checked={event.visible === false}
+            onChange={(hidden) => act('set_event_visible', { visible: !hidden })}
             last
           />
         </ValueGroup>
 
         <div className="fm-page-cta fm-page-cta--separated">
-          <Button mode="filled" size="l" stretched onClick={openVitrina}>
-            Посмотреть витрину
+          <Button mode="filled" size="l" stretched onClick={openPage}>
+            Открыть страницу
           </Button>
         </div>
       </div>
 
-      <BottomSheet open={sheet === 'date'} title="Дата старта" onClose={() => setSheet(null)}>
+      <BottomSheet open={sheet === 'date'} title="Дата" onClose={() => setSheet(null)}>
         <div className="fm-field-sheet">
           <input type="date" className="fm-field-sheet-input fm-field-sheet-input--picker" value={dateDraft} onChange={(e) => setDateDraft(e.target.value)} />
           <Button mode="filled" size="l" stretched disabled={busy || !dateDraft} onClick={saveDate}>Готово</Button>
         </div>
       </BottomSheet>
 
-      <BottomSheet open={sheet === 'time'} title="Время старта" onClose={() => setSheet(null)}>
+      <BottomSheet open={sheet === 'time'} title="Время" onClose={() => setSheet(null)}>
         <div className="fm-field-sheet">
           <input type="time" className="fm-field-sheet-input fm-field-sheet-input--picker" value={timeDraft} onChange={(e) => setTimeDraft(e.target.value)} />
           <Button mode="filled" size="l" stretched disabled={busy || !timeDraft} onClick={saveTime}>Готово</Button>

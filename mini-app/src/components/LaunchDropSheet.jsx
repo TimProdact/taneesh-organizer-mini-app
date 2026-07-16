@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@telegram-apps/telegram-ui';
 import { BottomSheet } from './BottomSheet.jsx';
-import { ProductListRow } from './ProductListRow.jsx';
 import { haptic, runActionSafe } from '../api.js';
 
-const STEPS = 3;
+const STEPS = 2;
 
 function toDateValue(iso) {
   const d = iso ? new Date(iso) : new Date(Date.now() + 7 * 86_400_000);
@@ -28,51 +27,39 @@ function mergeDateTime(datePart, timePart) {
   return base.toISOString();
 }
 
-function listProducts(snapshot) {
-  if (snapshot.products?.length) return snapshot.products;
-  if (snapshot.product?.id) return [snapshot.product];
-  return [];
-}
-
-export function LaunchDropSheet({ open, snapshot, onSnapshotChange, onClose, onGoCatalog }) {
-  const products = listProducts(snapshot);
+/** Wizard создания мероприятия (без каталога товаров). */
+export function LaunchDropSheet({ open, snapshot, onSnapshotChange, onClose }) {
   const [step, setStep] = useState(1);
-  const [selectedProductId, setSelectedProductId] = useState('');
+  const [name, setName] = useState('');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
-  const [stock, setStock] = useState(100);
+  const [capacity, setCapacity] = useState(100);
   const [busy, setBusy] = useState(false);
-
-  const selectedProduct = useMemo(
-    () => products.find((p) => p.id === selectedProductId) || null,
-    [products, selectedProductId],
-  );
 
   useEffect(() => {
     if (!open) return;
-    const list = listProducts(snapshot);
     setStep(1);
-    setSelectedProductId(list[0]?.id || '');
-    setDate(toDateValue(snapshot.startsAt));
-    setTime(toTimeValue(snapshot.startsAt));
-    setStock(100);
+    setName('');
+    setDate(toDateValue(snapshot?.startsAt));
+    setTime(toTimeValue(snapshot?.startsAt));
+    setCapacity(100);
     setBusy(false);
   }, [open, snapshot]);
 
   const next = () => {
+    if (!name.trim()) return;
     haptic('selection');
-    setStep((s) => Math.min(STEPS, s + 1));
+    setStep(2);
   };
 
-  const launch = async () => {
-    if (busy || !selectedProductId) return;
+  const create = async () => {
+    if (busy || !name.trim()) return;
     setBusy(true);
     try {
-      const nextSnap = await runActionSafe('launch_drop', {
-        productId: selectedProductId,
+      const nextSnap = await runActionSafe('create_event', {
+        name: name.trim(),
         startsAt: mergeDateTime(date, time),
-        stock,
-        totalStock: stock,
+        capacity,
       });
       onSnapshotChange(nextSnap);
       haptic('success');
@@ -85,95 +72,50 @@ export function LaunchDropSheet({ open, snapshot, onSnapshotChange, onClose, onG
   return (
     <BottomSheet
       open={open}
-      title="Новый дроп"
+      title="Новое мероприятие"
       subtitle={`Шаг ${step}/${STEPS}`}
       className="fm-sheet-panel--wizard"
       onClose={onClose}
     >
-      {!products.length ? (
+      {step === 1 ? (
         <div className="fm-wizard-sheet">
-          <p className="fm-empty-hint fm-empty-hint--sheet">Сначала добавь товар в каталог</p>
-          <Button
-            mode="filled"
-            size="l"
-            stretched
-            onClick={() => {
-              onClose();
-              onGoCatalog?.();
-            }}
-          >
-            Перейти в Товары
-          </Button>
-        </div>
-      ) : null}
-
-      {products.length > 0 && step === 1 ? (
-        <div className="fm-wizard-sheet">
-          <p className="fm-media-hint">Выберите товар из каталога — его продаём в этом дропе</p>
-          <p className="fm-wizard-meta">{products.length} {products.length === 1 ? 'товар' : products.length < 5 ? 'товара' : 'товаров'} в каталоге</p>
-          <div className="fm-inset-card fm-entity-list">
-              {products.map((product, index) => {
-                const selected = selectedProductId === product.id;
-                return (
-                  <ProductListRow
-                    key={product.id}
-                    product={product}
-                    selected={selected}
-                    pickMode
-                    last={index === products.length - 1}
-                    onClick={() => setSelectedProductId(product.id)}
-                  />
-                );
-              })}
-            </div>
-          <div className="fm-wizard-sheet-cta fm-wizard-sheet-cta--separated">
-            <Button mode="filled" size="l" stretched disabled={!selectedProductId} onClick={next}>
-              Далее →
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {products.length > 0 && step === 2 ? (
-        <div className="fm-wizard-sheet">
-          {selectedProduct ? (
-            <div className="fm-wizard-picked">
-              <span className="fm-wizard-picked-label">Товар</span>
-              <span className="fm-wizard-picked-value">{selectedProduct.name || 'Без названия'}</span>
-            </div>
-          ) : null}
-          <p className="fm-media-hint">Когда старт?</p>
-          <div className="fm-wizard-datetime">
+          <p className="fm-media-hint">Название и дата</p>
+          <input
+            type="text"
+            className="fm-wizard-input"
+            placeholder="Название ивента"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <div className="fm-wizard-datetime" style={{ marginTop: 12 }}>
             <input type="date" className="fm-wizard-input" value={date} onChange={(e) => setDate(e.target.value)} />
             <input type="time" className="fm-wizard-input" value={time} onChange={(e) => setTime(e.target.value)} />
           </div>
           <div className="fm-wizard-sheet-cta fm-wizard-sheet-cta--separated">
-            <Button mode="filled" size="l" stretched onClick={next}>
+            <Button mode="filled" size="l" stretched disabled={!name.trim()} onClick={next}>
               Далее →
             </Button>
           </div>
         </div>
       ) : null}
 
-      {products.length > 0 && step === 3 ? (
+      {step === 2 ? (
         <div className="fm-wizard-sheet">
-          {selectedProduct ? (
-            <div className="fm-wizard-picked">
-              <span className="fm-wizard-picked-label">Товар</span>
-              <span className="fm-wizard-picked-value">{selectedProduct.name || 'Без названия'}</span>
-            </div>
-          ) : null}
-          <p className="fm-media-hint">Сколько в продаже?</p>
+          <div className="fm-wizard-picked">
+            <span className="fm-wizard-picked-label">Ивент</span>
+            <span className="fm-wizard-picked-value">{name.trim() || '—'}</span>
+          </div>
+          <p className="fm-media-hint">Сколько билетов?</p>
           <div className="fm-wizard-stock">
-            <span className="fm-wizard-stock-label">{stock} штук</span>
+            <span className="fm-wizard-stock-label">{capacity} билетов</span>
             <div className="fm-stepper fm-stepper--wizard">
-              <button type="button" className="fm-stepper-btn" disabled={stock <= 1} onClick={() => setStock((s) => Math.max(1, s - 10))}>−</button>
-              <button type="button" className="fm-stepper-btn" onClick={() => setStock((s) => s + 10)}>+</button>
+              <button type="button" className="fm-stepper-btn" disabled={capacity <= 1} onClick={() => setCapacity((s) => Math.max(1, s - 10))}>−</button>
+              <button type="button" className="fm-stepper-btn" onClick={() => setCapacity((s) => s + 10)}>+</button>
             </div>
           </div>
           <div className="fm-wizard-sheet-cta fm-wizard-sheet-cta--separated">
-            <Button mode="filled" size="l" stretched disabled={busy} onClick={launch}>
-              Запустить дроп
+            <Button mode="filled" size="l" stretched disabled={busy} onClick={create}>
+              Создать мероприятие
             </Button>
           </div>
         </div>

@@ -17,7 +17,7 @@ export function OrdersPage({ snapshot, push }) {
 
   return (
     <SubpageLayout>
-      <PageHeader title="Заказы" subtitle={`${orders.length} всего`} />
+      <PageHeader title="Продажи" subtitle={`${orders.length} всего`} />
       <div className="fm-page-body">
         <div className="fm-segment-wrap fm-segment-wrap--media">
           <SegmentedControl>

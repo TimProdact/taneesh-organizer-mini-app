@@ -4,27 +4,27 @@ import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { copyText, haptic } from '../api.js';
 
 export function WaitlistPage({ snapshot }) {
-  const list = snapshot.waitlist || [];
+  const list = snapshot.audience || snapshot.waitlist || [];
 
   const handleCopy = () => {
     haptic('light');
-    copyText(list.map((w) => w.contact).join('\n'));
+    copyText(list.map((w) => w.contact || w.phone || w.name || '').filter(Boolean).join('\n'));
   };
 
   return (
     <SubpageLayout>
-      <PageHeader title="Waitlist" subtitle={`${list.length} контактов`} />
+      <PageHeader title="Аудитория" subtitle={`${list.length} контактов`} />
       <div className="fm-page-body">
         {list.length > 0 ? (
           <div className="fm-inset-card fm-waitlist-card">
             <ul className="fm-waitlist-list">
               {list.map((w) => (
-                <li key={w.id}>{w.contact}</li>
+                <li key={w.id}>{w.contact || w.name || w.phone}</li>
               ))}
             </ul>
           </div>
         ) : (
-          <p className="fm-empty-hint">Пока никто не подписался на уведомление</p>
+          <p className="fm-empty-hint">Пока нет зрителей в CRM — появятся после продаж и заявок</p>
         )}
 
         {list.length > 0 ? (

@@ -6,9 +6,6 @@ import { useNavStack } from './hooks/useNavStack.js';
 import { waitForInitData, hasTelegramContext } from './telegram-init.js';
 import { SCREENS } from './navigation/screens.js';
 import { HubPage } from './pages/HubPage.jsx';
-import { CatalogPage } from './pages/CatalogPage.jsx';
-import { ProductPage } from './pages/ProductPage.jsx';
-import { ProductMediaPage } from './pages/ProductMediaPage.jsx';
 import { DropsListPage } from './pages/DropsListPage.jsx';
 import { DropPage } from './pages/DropPage.jsx';
 import { OrdersPage } from './pages/OrdersPage.jsx';
@@ -94,28 +91,8 @@ export default function App() {
     switch (id) {
       case SCREENS.HUB:
         return <HubPage snapshot={snapshot} push={push} />;
-      case SCREENS.CATALOG:
-        return <CatalogPage snapshot={snapshot} onSnapshotChange={setSnapshot} push={push} />;
-      case SCREENS.PRODUCT:
-        return (
-          <ProductPage
-            snapshot={snapshot}
-            onSnapshotChange={setSnapshot}
-            push={push}
-            productId={params.productId}
-            autoOpenField={params.autoOpenField}
-          />
-        );
-      case SCREENS.PRODUCT_MEDIA:
-        return (
-          <ProductMediaPage
-            snapshot={snapshot}
-            onSnapshotChange={setSnapshot}
-            onDone={pop}
-            productId={params.productId}
-          />
-        );
       case SCREENS.DROPS:
+      case SCREENS.EVENTS:
         return (
           <DropsListPage
             snapshot={snapshot}
@@ -124,11 +101,12 @@ export default function App() {
           />
         );
       case SCREENS.DROP:
+      case SCREENS.EVENT:
         return (
           <DropPage
             snapshot={snapshot}
             onSnapshotChange={setSnapshot}
-            dropId={params.dropId}
+            dropId={params.dropId || params.eventId}
           />
         );
       case SCREENS.ORDERS:
@@ -141,6 +119,7 @@ export default function App() {
           />
         );
       case SCREENS.WAITLIST:
+      case SCREENS.AUDIENCE:
         return <WaitlistPage snapshot={snapshot} />;
       case SCREENS.STOREFRONT_EDIT:
         return (

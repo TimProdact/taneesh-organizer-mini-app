@@ -62,8 +62,8 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
         </ValueGroup>
 
         <ValueGroup className="fm-value-group--spaced">
-          <ValueRow label="Товар" value={order.productName || '—'} />
-          <ValueRow label="Издание" value={order.edition || '—'} />
+          <ValueRow label="Ивент" value={order.eventName || order.productName || '—'} />
+          <ValueRow label="Тип билета" value={order.ticketType || order.edition || '—'} />
           <ValueRow label="Сумма" value={formatPrice(order.amount)} />
           <ValueRow label="Оплата" value={order.paymentMethod || '—'} last />
         </ValueGroup>

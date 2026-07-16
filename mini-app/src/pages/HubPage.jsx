@@ -10,15 +10,13 @@ export function HubPage({ snapshot, push }) {
   const pending = pendingOrders(snapshot.orders);
   const storefront = snapshot.storefront || {};
   const brand = snapshot.brand || {};
-  const displayName = storefront.displayName || brand.name || 'THE4';
+  const displayName = storefront.displayName || brand.name || 'Taneesh Organizer';
   const avatarUrl = storefront.avatarUrl || brand.logoUrl || '';
-  const logoEmoji = storefront.logoEmoji || brand.logoEmoji || '🐱';
-  const products = snapshot.products || [];
-  void products;
-  const drops = snapshot.drops || [];
+  const logoEmoji = storefront.logoEmoji || brand.logoEmoji || '🎟️';
+  const events = snapshot.events || snapshot.drops || [];
   const url = vitrinaUrl();
 
-  const openVitrina = () => {
+  const openPublicPage = () => {
     haptic('light');
     if (tg?.openLink) tg.openLink(url);
     else window.open(url, '_blank', 'noopener');
@@ -31,7 +29,7 @@ export function HubPage({ snapshot, push }) {
           <button
             type="button"
             className="fm-hub-hero-round-btn"
-            aria-label="QR-код витрины"
+            aria-label="QR-код страницы"
             onClick={() => { haptic('light'); push(SCREENS.STORE_QR); }}
           >
             <Icon24QR />
@@ -64,7 +62,7 @@ export function HubPage({ snapshot, push }) {
             label="Мероприятия"
             glyph="📅"
             tone="#007aff"
-            value={String(snapshot.meta?.eventsCount ?? drops.length)}
+            value={String(snapshot.meta?.eventsCount ?? events.length)}
             onClick={() => push(SCREENS.DROPS)}
           />
           <MenuRow
@@ -92,7 +90,7 @@ export function HubPage({ snapshot, push }) {
         </MenuGroup>
 
         <div className="fm-hub-cta">
-          <button type="button" className="fm-hub-cta-btn" onClick={openVitrina}>
+          <button type="button" className="fm-hub-cta-btn" onClick={openPublicPage}>
             Открыть страницу
           </button>
         </div>

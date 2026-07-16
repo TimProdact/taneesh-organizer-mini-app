@@ -119,7 +119,23 @@ export async function grantOrganizer(telegramId) {
 }
 
 export function getSnapshot() {
+  return structuredClone(store);
+}
+
+function defaultStore() {
   const now = Date.now();
+  const events = [
+    {
+      id: 'evt-demo-1',
+      name: 'Demo Event',
+      stock: 40,
+      totalStock: 100,
+      startsAt: new Date(now + 86_400_000).toISOString(),
+      paused: false,
+      phase: 'pre_drop',
+      visible: true,
+    },
+  ];
   return {
     storefront: {
       displayName: 'Taneesh Organizer',
@@ -129,23 +145,16 @@ export function getSnapshot() {
       socials: {},
     },
     brand: { name: 'Taneesh Organizer', logoEmoji: '🎟️' },
+    // events — канон; drops — alias для старых экранов
+    events,
+    drops: events,
     products: [],
-    drops: [
-      {
-        id: 'evt-demo-1',
-        productId: null,
-        name: 'Demo Event',
-        stock: 40,
-        totalStock: 100,
-        startsAt: new Date(now + 86_400_000).toISOString(),
-        paused: false,
-        phase: 'pre_drop',
-      },
-    ],
     orders: [],
+    audience: [],
     waitlist: [],
+    controllers: [],
     meta: {
-      eventsCount: 1,
+      eventsCount: events.length,
       audienceCount: 0,
       controllersCount: 0,
       pendingApplications: 0,
@@ -153,8 +162,54 @@ export function getSnapshot() {
   };
 }
 
+let store = defaultStore();
+
+function syncAliases() {
+  store.drops = store.events;
+  store.waitlist = store.audience;
+  store.meta = {
+    ...store.meta,
+    eventsCount: store.events.length,
+    audienceCount: store.audience.length,
+    controllersCount: (store.controllers || []).length,
+  };
+}
+
 export async function runAction(adminAction, payload = {}) {
-  void adminAction;
-  void payload;
+  if (adminAction === 'create_event') {
+    const id = `evt-${Date.now()}`;
+    const capacity = Math.max(1, Number(payload.capacity) || 100);
+    store.events.push({
+      id,
+      name: String(payload.name || 'Мероприятие').trim(),
+      stock: capacity,
+      totalStock: capacity,
+      startsAt: payload.startsAt || new Date().toISOString(),
+      paused: false,
+      phase: 'pre_drop',
+      visible: true,
+    });
+    syncAliases();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'set_starts_at' || adminAction === 'set_stock' || adminAction === 'set_paused' || adminAction === 'set_event_visible' || adminAction === 'set_drop_visible') {
+    const id = payload.eventId || payload.dropId;
+    const event = store.events.find((e) => e.id === id);
+    if (event) {
+      if (payload.startsAt != null) event.startsAt = payload.startsAt;
+      if (payload.stock != null) event.stock = payload.stock;
+      if (payload.paused != null) event.paused = payload.paused;
+      if (payload.visible != null) event.visible = payload.visible;
+    }
+    syncAliases();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'update_storefront') {
+    store.storefront = { ...store.storefront, ...(payload.storefront || {}) };
+    return getSnapshot();
+  }
+
   return getSnapshot();
 }

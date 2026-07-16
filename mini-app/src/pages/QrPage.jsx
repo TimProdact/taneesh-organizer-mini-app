@@ -14,9 +14,9 @@ function ShareIcon() {
 export function QrPage({ snapshot }) {
   const storefront = snapshot.storefront || {};
   const brand = snapshot.brand || {};
-  const displayName = storefront.displayName || brand.name || 'Pocket Pals';
+  const displayName = storefront.displayName || brand.name || 'Taneesh Organizer';
   const avatarUrl = storefront.avatarUrl || brand.logoUrl || '';
-  const logoEmoji = storefront.logoEmoji || brand.logoEmoji || '🐱';
+  const logoEmoji = storefront.logoEmoji || brand.logoEmoji || '🎟️';
   const url = vitrinaUrl();
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(url)}`;
 
@@ -56,7 +56,7 @@ export function QrPage({ snapshot }) {
         <div className="fm-qr-card">
           <h2 className="fm-qr-name">{displayName}</h2>
           <p className="fm-qr-handle">{vitrinaShortUrl()}</p>
-          <img src={qrSrc} alt="QR витрины" className="fm-qr-image" width={240} height={240} />
+          <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
         </div>
       </div>
 

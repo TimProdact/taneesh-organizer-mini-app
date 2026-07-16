@@ -1,14 +1,18 @@
 export const SCREENS = {
   HUB: 'hub',
+  /** @deprecated shop leftovers — not routed from Hub */
   CATALOG: 'catalog',
   PRODUCT: 'product',
   PRODUCT_MEDIA: 'product-media',
   DROPS: 'drops',
+  EVENTS: 'events',
   LAUNCH_DROP: 'launch-drop',
   DROP: 'drop',
+  EVENT: 'event',
   ORDERS: 'orders',
   ORDER_DETAIL: 'order-detail',
   WAITLIST: 'waitlist',
+  AUDIENCE: 'audience',
   STOREFRONT_EDIT: 'storefront-edit',
   STOREFRONT_LOGO: 'storefront-logo',
   SOCIALS: 'socials',
