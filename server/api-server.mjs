@@ -1,11 +1,9 @@
-#!/usr/bin/env node
 /**
- * Long-running Organizer Admin API (Render / local).
- * Same auth + webhook as Netlify function.
+ * Long-running Organizer Admin API + static Mini App (Render / local).
  */
 import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readFileSync, existsSync, statSync } from 'node:fs';
+import { dirname, join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { validateInitData } from './telegram-auth.mjs';
 import {
@@ -17,6 +15,21 @@ import {
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 8788);
+const PUBLIC = join(ROOT, 'public');
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+  '.json': 'application/json',
+  '.woff2': 'font/woff2',
+};
 
 function loadEnv() {
   const envPath = join(ROOT, '.env');
@@ -47,13 +60,35 @@ function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Content-Type', 'application/json');
 }
 
-function send(res, status, body) {
+function sendJson(res, status, body) {
   cors(res);
+  res.setHeader('Content-Type', 'application/json');
   res.writeHead(status);
   res.end(JSON.stringify(body));
+}
+
+function tryStatic(req, res, pathname) {
+  let rel = pathname;
+  if (rel === '/' || rel === '') rel = '/index.html';
+  const filePath = join(PUBLIC, rel.replace(/^\/+/, ''));
+  if (!filePath.startsWith(PUBLIC) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    if (rel.startsWith('/mini-app')) {
+      const index = join(PUBLIC, 'mini-app', 'index.html');
+      if (existsSync(index)) {
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.writeHead(200);
+        res.end(readFileSync(index));
+        return true;
+      }
+    }
+    return false;
+  }
+  res.setHeader('Content-Type', MIME[extname(filePath)] || 'application/octet-stream');
+  res.writeHead(200);
+  res.end(readFileSync(filePath));
+  return true;
 }
 
 async function readBody(req) {
@@ -68,9 +103,7 @@ async function authUser(body) {
   if (!parsed) throw Object.assign(new Error('Invalid Telegram session'), { status: 401 });
   if (!(await isOrganizer(parsed.user.id))) {
     throw Object.assign(
-      new Error(
-        'Нет доступа. Открой @taneesh_org_bot и отправь /login <пароль>.',
-      ),
+      new Error('Нет доступа. Открой @taneesh_org_bot и отправь /login <пароль>.'),
       { status: 403 },
     );
   }
@@ -127,43 +160,55 @@ const server = createServer(async (req, res) => {
 
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
 
-    if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/api')) {
-      return send(res, 200, { ok: true, service: 'taneesh-organizer-api' });
-    }
-
     if (url.pathname === '/telegram/webhook' && req.method === 'POST') {
       const update = await readBody(req);
       await handleTelegramUpdate(update);
-      return send(res, 200, { ok: true });
+      return sendJson(res, 200, { ok: true });
     }
 
-    if (req.method !== 'POST') return send(res, 405, { error: 'POST only' });
-
-    const body = await readBody(req);
-
-    if (body.action === 'grant_organizer') {
-      if (body.secret !== ADMIN_PASSWORD) return send(res, 403, { error: 'Forbidden' });
-      await grantOrganizer(body.telegramId);
-      return send(res, 200, { ok: true });
+    if (req.method === 'GET' && (url.pathname === '/api' || url.pathname === '/health')) {
+      return sendJson(res, 200, { ok: true, service: 'taneesh-organizer-api' });
     }
 
-    const user = await authUser(body);
-    if (body.action === 'bootstrap') {
-      return send(res, 200, {
-        snapshot: getSnapshot(),
-        firstName: user.first_name,
-        telegramId: user.id,
+    if (req.method === 'POST' && (url.pathname === '/' || url.pathname === '/api')) {
+      const body = await readBody(req);
+
+      if (body.action === 'grant_organizer') {
+        if (body.secret !== ADMIN_PASSWORD) return sendJson(res, 403, { error: 'Forbidden' });
+        await grantOrganizer(body.telegramId);
+        return sendJson(res, 200, { ok: true });
+      }
+
+      const user = await authUser(body);
+      if (body.action === 'bootstrap') {
+        return sendJson(res, 200, {
+          snapshot: getSnapshot(),
+          firstName: user.first_name,
+          telegramId: user.id,
+        });
+      }
+      if (body.action === 'admin_action') {
+        const snapshot = await runAction(body.adminAction, body.payload || {});
+        return sendJson(res, 200, { snapshot });
+      }
+      return sendJson(res, 400, { error: 'Unknown action' });
+    }
+
+    if (req.method === 'GET' && tryStatic(req, res, url.pathname)) return;
+
+    if (req.method === 'GET' && url.pathname === '/') {
+      return sendJson(res, 200, {
+        ok: true,
+        service: 'taneesh-organizer-api',
+        miniApp: '/mini-app/',
       });
     }
-    if (body.action === 'admin_action') {
-      const snapshot = await runAction(body.adminAction, body.payload || {});
-      return send(res, 200, { snapshot });
-    }
-    return send(res, 400, { error: 'Unknown action' });
+
+    sendJson(res, 404, { error: 'Not found' });
   } catch (e) {
     const status = e.status || 500;
     if (status >= 500) console.error(e);
-    send(res, status, { error: e.message || 'Server error' });
+    sendJson(res, status, { error: e.message || 'Server error' });
   }
 });
 
