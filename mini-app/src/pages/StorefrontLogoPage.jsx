@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Button, List, Section } from '@telegram-apps/telegram-ui';
+import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
@@ -49,17 +49,17 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
     <SubpageLayout stickyCta>
       <PageHeader title="Логотип" subtitle="Фото профиля" />
       <List className="fm-page-list">
-        <Section header="Фото" footer="Загрузка с устройства">
-          <div className="fm-storefront-hero fm-storefront-hero--in-section">
-            <div className="fm-storefront-hero-preview" aria-hidden>
-              {photoPreview ? (
-                <img src={photoPreview} alt="" className="fm-storefront-hero-img" />
-              ) : (
-                <span className="fm-storefront-hero-empty">Нет фото</span>
-              )}
-            </div>
+        <div className="fm-storefront-hero">
+          <div className="fm-storefront-hero-preview" aria-hidden>
+            {photoPreview ? (
+              <img src={photoPreview} alt="" className="fm-storefront-hero-img" />
+            ) : (
+              <span className="fm-storefront-hero-empty">Нет фото</span>
+            )}
           </div>
-        </Section>
+        </div>
+
+        <p className="fm-media-hint">Фото логотипа с устройства</p>
         <input
           ref={fileRef}
           type="file"

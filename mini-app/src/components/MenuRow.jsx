@@ -1,9 +1,21 @@
 import { Cell, Navigation, Section } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
+import { HubSectionHead } from './HubSectionHead.jsx';
 
 export function MenuGroup({ children, header, footer }) {
+  if (header) {
+    return (
+      <div className="fm-section-group">
+        <HubSectionHead title={header} />
+        <Section footer={footer}>
+          {children}
+        </Section>
+      </div>
+    );
+  }
+
   return (
-    <Section header={header} footer={footer}>
+    <Section footer={footer}>
       {children}
     </Section>
   );

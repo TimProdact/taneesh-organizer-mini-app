@@ -106,7 +106,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
       />
 
       <List className="fm-page-list">
-        <ValueGroup header="Медиа">
+        <ValueGroup>
           <ValueRow
             label="Фото"
             value={photoCount ? `${photoCount} из 6` : 'Не указано'}

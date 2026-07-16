@@ -49,7 +49,7 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
     <SubpageLayout>
       <PageHeader title="Профиль организатора" subtitle="Лого, описание, соцсети" />
       <List className="fm-page-list">
-        <ValueGroup header="Профиль">
+        <ValueGroup>
           <ValueRow
             label="Логотип"
             value={logoSummary(profile)}

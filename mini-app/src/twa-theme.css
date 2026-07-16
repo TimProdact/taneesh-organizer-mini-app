@@ -243,13 +243,15 @@ html[data-tgui-platform='android'] body {
 
 /* Force iOS inset Section chrome on all platforms */
 .fm-hub-list > section > div,
-.fm-page-list > section > div {
+.fm-page-list > section > div,
+.fm-section-group > section > div {
   background: transparent !important;
   box-shadow: none !important;
 }
 
 .fm-hub-list > section > div > div:last-child,
-.fm-page-list > section > div > div:last-child {
+.fm-page-list > section > div > div:last-child,
+.fm-section-group > section > div > div:last-child {
   background: var(--fm-surface-bg) !important;
   border-radius: var(--fm-radius-card);
   overflow: hidden;
@@ -260,7 +262,6 @@ html[data-tgui-platform='android'] body {
 .fm-page-list > section > div > header {
   padding-left: 16px !important;
   padding-right: 16px !important;
-  /* Keep kit iOS Section header look (СВОДКА): caps + section_header_text_color */
 }
 
 /* Lock Cell metrics via our classes — kit hashes to tgui-*, [class*='Cell'] never matches */
@@ -278,7 +279,8 @@ html[data-tgui-platform='android'] body {
 
 /* Kit Section dividers are missing inset styles — restore Settings look */
 .fm-hub-list > section hr,
-.fm-page-list > section hr {
+.fm-page-list > section hr,
+.fm-section-group > section hr {
   display: block;
   border: 0;
   border-top: var(--fm-divider-weight) solid var(--fm-separator);

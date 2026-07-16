@@ -59,7 +59,7 @@ export function AudiencePage({ snapshot }) {
         />
 
         {filtered.length > 0 ? (
-          <Section header="Клиенты">
+          <Section>
             {filtered.map((p) => (
               <Cell
                 key={p.id}

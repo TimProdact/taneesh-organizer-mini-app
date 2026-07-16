@@ -76,7 +76,7 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
       <PageHeader title="Контролеры" subtitle={`${list.length} из ${MAX}`} />
       <List className="fm-page-list">
         {list.length > 0 ? (
-          <Section header="Команда">
+          <Section>
             {list.map((c) => (
               <Cell
                 key={c.id}
