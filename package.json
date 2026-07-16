@@ -6,7 +6,8 @@
     "dev:mini-app": "npm run dev --prefix mini-app",
     "build:mini-app": "npm run build --prefix mini-app && node scripts/sync-public.mjs",
     "setup:telegram": "node scripts/setup-telegram.mjs",
-    "deploy": "node scripts/deploy-netlify.mjs",
+    "deploy": "node scripts/deploy-render.mjs",
+    "deploy:netlify": "node scripts/deploy-netlify.mjs",
     "start": "node server/api-server.mjs"
   },
   "dependencies": {

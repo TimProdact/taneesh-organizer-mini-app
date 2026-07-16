@@ -2,33 +2,42 @@
 
 Отдельный бот: **@taneesh_org_bot**
 
-## Публичный деплой (Netlify)
+## Публичный деплой — Render (основной)
+
+Сервис уже поднят:
+
+| | URL |
+|--|-----|
+| API / health | https://taneesh-organizer-api.onrender.com/health |
+| Mini App | https://taneesh-organizer-api.onrender.com/mini-app/ |
+| Webhook | https://taneesh-organizer-api.onrender.com/telegram/webhook |
+| Dashboard | https://dashboard.render.com/web/srv-d9ccu39kh4rs73ci64f0 |
 
 ```bash
 cd organizer-mini-app
-# токен уже в .env (не коммитить)
-npm run deploy
+# токен в .env (не коммитить)
+npm run deploy          # = Render: push + redeploy + setup telegram
 ```
 
-Поднимает:
-- Mini App: `https://<site>/mini-app/`
-- API: `https://<site>/api`
-- Webhook: `https://<site>/telegram/webhook`
-- Menu button «Админка» + команды бота
+Env на Render: `TELEGRAM_BOT_TOKEN`, `ADMIN_PASSWORD`, `TELEGRAM_ORGANIZER_IDS`.
+
+> Netlify не используем (лимиты сайтов). Скрипт `deploy-netlify.mjs` — legacy.
 
 ## Привязка Telegram → организатор
 
-1. Открой @taneesh_org_bot
-2. `/login <пароль>` (пароль из `ADMIN_PASSWORD` в `.env` / Netlify env)
-3. `/whoami` — проверка доступа
-4. Кнопка **Админка** внизу чата
+1. Открой @taneesh_org_bot  
+2. `/login <пароль>` (из `ADMIN_PASSWORD` в `.env` / Render env)  
+3. `/whoami` — проверка  
+4. Кнопка **Админка**
 
-Либо заранее: `TELEGRAM_ORGANIZER_IDS=123456789` в env (через запятую).
+Либо заранее: `TELEGRAM_ORGANIZER_IDS=123456789` в Render env.
 
 ## Локально
 
 ```bash
 npm install && npm install --prefix mini-app
-npm run dev:mini-app
-# API локально позже; для полного флоу нужен публичный HTTPS (Telegram требование)
+npm start                 # API + static на :8788
+npm run dev:mini-app      # только Vite UI
 ```
+
+Для Telegram нужен публичный HTTPS — поэтому прод = Render.
