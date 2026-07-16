@@ -79,11 +79,10 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
             {list.map((c) => (
               <Cell
                 key={c.id}
+                className="fm-entity-row"
                 before={<span className="fm-entity-glyph" aria-hidden>📷</span>}
-                subtitle={formatUzMobileMask(c.phoneNational || c.phone || '')}
-                description={`${c.scanCount ?? 0} сканирований · вход ${formatLastLogin(c.lastLoginAt)}`}
+                subtitle={`${formatUzMobileMask(c.phoneNational || c.phone || '')} · ${c.scanCount ?? 0} сканов · ${formatLastLogin(c.lastLoginAt)}`}
                 after={<Navigation />}
-                multiline
                 onClick={() => {
                   haptic('selection');
                   setSelectedId(c.id);

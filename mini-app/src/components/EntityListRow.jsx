@@ -1,7 +1,8 @@
 import { Cell, Navigation } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
+import { previewLine } from './ValueRow.jsx';
 
-/** Entity list row — Telegram UI `Cell` */
+/** Entity list row — title + one-line subtitle (ellipsis), never wraps */
 export function EntityListRow({
   glyph,
   title,
@@ -12,8 +13,9 @@ export function EntityListRow({
   void last;
   return (
     <Cell
+      className="fm-entity-row"
       before={glyph ? <span className="fm-entity-glyph" aria-hidden>{glyph}</span> : undefined}
-      subtitle={subtitle || undefined}
+      subtitle={subtitle ? previewLine(subtitle, '') : undefined}
       after={<Navigation />}
       onClick={
         onClick
@@ -24,7 +26,7 @@ export function EntityListRow({
           : undefined
       }
     >
-      {title}
+      {previewLine(title, '—')}
     </Cell>
   );
 }

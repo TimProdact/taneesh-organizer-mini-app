@@ -126,7 +126,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           />
           <ValueRow
             label="Описание"
-            value={description ? (description.length > 42 ? `${description.slice(0, 42)}…` : description) : '—'}
+            value={description || '—'}
             onClick={() => setField('description')}
           />
           <ValueRow

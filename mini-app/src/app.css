@@ -1493,6 +1493,66 @@ button.fm-value-row {
   font-size: 0.9375rem;
 }
 
+/* Settings ValueRow: label never ellipsizes; value is one line + ellipsis */
+.fm-value-row [class*='title'] {
+  flex-shrink: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+}
+
+.fm-value-row [class*='head'] {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fm-value-row [class*='hint'],
+.fm-value-hint {
+  flex: 1 1 0 !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: right;
+  color: var(--tg-theme-hint-color, #8e8e93);
+}
+
+.fm-value-hint--muted {
+  opacity: 0.9;
+}
+
+.fm-value-row [class*='after'] {
+  flex-shrink: 0;
+}
+
+/* Don't ellipsize the whole head as one blob — only the hint/value */
+.fm-value-row [class*='middle'] > [class*='head'] {
+  text-overflow: clip !important;
+}
+
+/* Entity rows: title + subtitle stay single-line */
+.fm-entity-row [class*='subtitle'],
+.fm-entity-row [class*='title'] {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.fm-page-list > [class*='Cell']:not(.fm-value-row):not(.fm-entity-row) [class*='subtitle'],
+.fm-hub-list > section [class*='Cell']:not(.fm-value-row) [class*='subtitle'] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .fm-page-cta--separated {
   margin-top: 0;
   padding-top: 0;

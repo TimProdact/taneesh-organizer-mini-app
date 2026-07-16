@@ -60,16 +60,21 @@ export function AudiencePage({ snapshot }) {
             {filtered.map((p) => (
               <Cell
                 key={p.id}
+                className="fm-entity-row"
                 before={(
                   <Avatar
                     size={40}
                     acronym={(p.name || '?').slice(0, 2).toUpperCase()}
                   />
                 )}
-                subtitle={[p.phone, p.email].filter(Boolean).join(' · ') || p.contact || '—'}
-                description={`LTV ${formatPrice(p.ltv || 0)} · ${p.ticketsPurchased || 0} билетов · ${formatLastPurchase(p.lastPurchaseAt)}`}
+                subtitle={[
+                  p.phone,
+                  p.email,
+                  `LTV ${formatPrice(p.ltv || 0)}`,
+                  `${p.ticketsPurchased || 0} билетов`,
+                  formatLastPurchase(p.lastPurchaseAt),
+                ].filter(Boolean).join(' · ')}
                 after={<Navigation />}
-                multiline
               >
                 {p.name || 'Без имени'}
               </Cell>

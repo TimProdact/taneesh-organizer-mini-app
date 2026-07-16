@@ -1,7 +1,17 @@
 import { Cell, Navigation, Switch } from '@telegram-apps/telegram-ui';
 import { haptic } from '../api.js';
 
-/** Settings row — Telegram UI `Cell` */
+/** One-line preview for settings values — never wraps */
+export function previewLine(value, empty = '—') {
+  if (value == null) return empty;
+  const s = String(value).replace(/\s+/g, ' ').trim();
+  return s || empty;
+}
+
+/**
+ * Settings row — label full width (no ellipsis), value single-line ellipsis.
+ * Long text opens via onClick / sheet, not a second row.
+ */
 export function ValueRow({
   label,
   value,
@@ -9,22 +19,20 @@ export function ValueRow({
   last = false,
   muted = false,
   leading = null,
-  subtitle,
 }) {
   void last;
+  const preview = previewLine(value);
+
   return (
     <Cell
+      className="fm-value-row"
       before={leading || undefined}
-      subtitle={subtitle || undefined}
-      after={
-        onClick ? (
-          <Navigation>
-            <span className={muted ? 'fm-cell-muted' : undefined}>{value}</span>
-          </Navigation>
-        ) : (
-          <span className={`fm-cell-static${muted ? ' fm-cell-muted' : ''}`}>{value}</span>
-        )
-      }
+      hint={(
+        <span className={`fm-value-hint${muted ? ' fm-value-hint--muted' : ''}`}>
+          {preview}
+        </span>
+      )}
+      after={onClick ? <Navigation /> : undefined}
       onClick={
         onClick
           ? () => {
@@ -51,6 +59,7 @@ export function StepperRow({
   void last;
   return (
     <Cell
+      className="fm-value-row"
       after={(
         <div className="fm-stepper fm-stepper--compact">
           <button
@@ -88,6 +97,7 @@ export function SwitchRow({ label, checked, onChange, last = false }) {
   void last;
   return (
     <Cell
+      className="fm-value-row"
       after={(
         <Switch
           checked={checked}
