@@ -1461,7 +1461,7 @@ button.fm-value-row {
 }
 
 .fm-page-cta {
-  padding: 16px 0 8px;
+  padding: 0;
 }
 
 .fm-page-body {
@@ -1499,7 +1499,7 @@ button.fm-value-row {
 }
 
 .fm-page-cta--separated {
-  margin-top: 20px;
+  margin-top: 0;
   padding-top: 0;
 }
 
