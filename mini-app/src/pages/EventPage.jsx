@@ -42,6 +42,27 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
       <div className="fm-page-body">
         <ValueGroup>
           <ValueRow label="Статус" value={phaseLabel(event.phase, event.paused)} muted />
+          {event.location?.name ? (
+            <ValueRow
+              label="Место"
+              value={[event.location.name, event.location.address].filter(Boolean).join(' · ')}
+              muted
+            />
+          ) : null}
+          {event.interests?.length ? (
+            <ValueRow label="Интересы" value={event.interests.join(', ')} muted />
+          ) : null}
+          <ValueRow
+            label="Вход"
+            value={
+              event.isFree === false
+                ? `Платно · ${(event.tickets || []).length} тип(а)`
+                : event.freeEntryMode === 'open'
+                  ? 'Бесплатно · свободный'
+                  : 'Бесплатно · модерация'
+            }
+            muted
+          />
           <ValueRow
             label="Начало"
             value={formatEventDateTime(event.startsAt)}
@@ -51,16 +72,19 @@ export function EventPage({ snapshot, onSnapshotChange, eventId }) {
             label="Конец"
             value={formatEventDateTime(event.endsAt || defaultEnd())}
             onClick={() => setPicker('end')}
+            last={event.ticketsTotal == null}
           />
-          <StepperRow
-            label="Билеты"
-            value={`${left} / ${total}`}
-            decrementDisabled={busy || left <= 0}
-            incrementDisabled={busy || left >= total}
-            onDecrement={() => act('set_tickets_left', { ticketsLeft: Math.max(0, left - 1) })}
-            onIncrement={() => act('set_tickets_left', { ticketsLeft: Math.min(total, left + 1) })}
-            last
-          />
+          {event.ticketsTotal != null ? (
+            <StepperRow
+              label="Билеты"
+              value={`${left} / ${total}`}
+              decrementDisabled={busy || left <= 0}
+              incrementDisabled={busy || left >= total}
+              onDecrement={() => act('set_tickets_left', { ticketsLeft: Math.max(0, left - 1) })}
+              onIncrement={() => act('set_tickets_left', { ticketsLeft: Math.min(total, left + 1) })}
+              last
+            />
+          ) : null}
         </ValueGroup>
 
         <ValueGroup className="fm-value-group--spaced">

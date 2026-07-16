@@ -61,7 +61,7 @@ export function deliveryTypeLabel(type) {
   return type || '—';
 }
 
-/** upcoming | live | sold_out | paused */
+/** upcoming | live | sold_out | paused | draft */
 export function phaseLabel(phase, paused) {
   if (paused || phase === 'paused') return 'Пауза';
   const map = {
@@ -69,6 +69,7 @@ export function phaseLabel(phase, paused) {
     active: 'Идёт',
     upcoming: 'Скоро',
     sold_out: 'Распродано',
+    draft: 'Черновик',
   };
   return map[phase] || 'Скоро';
 }

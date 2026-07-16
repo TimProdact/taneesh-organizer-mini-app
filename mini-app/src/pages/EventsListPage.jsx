@@ -37,7 +37,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
             ))}
           </div>
         ) : (
-          <p className="fm-empty-hint">Создай первое мероприятие — название, дата и число билетов</p>
+          <p className="fm-empty-hint">Создай первое мероприятие — обложка, описание, место и билеты</p>
         )}
         <div className="fm-page-cta fm-page-cta--separated">
           <Button mode="filled" size="l" stretched onClick={() => setCreateOpen(true)}>
@@ -47,6 +47,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
       </div>
       <CreateEventSheet
         open={createOpen}
+        snapshot={snapshot}
         onSnapshotChange={onSnapshotChange}
         onClose={() => setCreateOpen(false)}
       />

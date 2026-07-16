@@ -145,6 +145,8 @@ function defaultStore() {
       bio: '',
       avatarUrl: '',
       logoEmoji: '🎟️',
+      /** Demo: allow paid events. Real API will mirror org verification. */
+      verified: true,
     },
     events,
     orders: [],
@@ -157,6 +159,7 @@ function defaultStore() {
       audienceCount: 0,
       controllersCount: 0,
       pendingApplications: 0,
+      verified: true,
     },
   };
 }
@@ -174,21 +177,66 @@ function refreshMeta() {
 
 export async function runAction(adminAction, payload = {}) {
   if (adminAction === 'create_event') {
-    const capacity = Math.max(1, Number(payload.capacity) || 100);
     const startsAt = payload.startsAt || new Date().toISOString();
     const endsAt =
       payload.endsAt ||
       new Date(new Date(startsAt).getTime() + 3 * 3600_000).toISOString();
+    const isFree = payload.isFree !== false;
+    const status = payload.status === 'draft' ? 'draft' : 'published';
+    const tickets = Array.isArray(payload.tickets) ? payload.tickets : [];
+    let ticketsLeft = null;
+    let ticketsTotal = null;
+    if (!isFree && tickets.length) {
+      ticketsTotal = tickets.reduce((sum, t) => sum + Math.max(0, Number(t.capacity) || 0), 0);
+      ticketsLeft = ticketsTotal;
+    } else if (payload.capacity != null) {
+      ticketsTotal = Math.max(1, Number(payload.capacity) || 100);
+      ticketsLeft = ticketsTotal;
+    }
+
+    const i18n = payload.i18n || {};
+    const titleRu =
+      String(payload.name || i18n.title?.ru || 'Мероприятие').trim() || 'Мероприятие';
+
     store.events.push({
       id: `evt-${Date.now()}`,
-      name: String(payload.name || 'Мероприятие').trim(),
-      ticketsLeft: capacity,
-      ticketsTotal: capacity,
+      name: titleRu,
+      i18n: {
+        title: {
+          ru: titleRu,
+          uz: String(i18n.title?.uz || '').trim(),
+          en: String(i18n.title?.en || '').trim(),
+        },
+        description: {
+          ru: String(i18n.description?.ru || '').trim(),
+          uz: String(i18n.description?.uz || '').trim(),
+          en: String(i18n.description?.en || '').trim(),
+        },
+      },
+      photos: Array.isArray(payload.photos) ? payload.photos.slice(0, 6) : [],
       startsAt,
       endsAt,
+      location: {
+        name: String(payload.location?.name || '').trim(),
+        address: String(payload.location?.address || '').trim(),
+      },
+      interests: Array.isArray(payload.interests) ? payload.interests : [],
+      isFree,
+      freeEntryMode: isFree ? (payload.freeEntryMode === 'open' ? 'open' : 'approval') : undefined,
+      tickets: isFree
+        ? []
+        : tickets.map((t) => ({
+            id: String(t.id || `t-${Date.now()}`),
+            name: String(t.name || '').trim(),
+            price: Math.max(0, Number(t.price) || 0),
+            capacity: Math.max(0, Number(t.capacity) || 0),
+          })),
+      ticketsLeft,
+      ticketsTotal,
+      status,
       paused: false,
-      phase: 'upcoming',
-      visible: true,
+      phase: status === 'draft' ? 'draft' : 'upcoming',
+      visible: status !== 'draft',
     });
     refreshMeta();
     return getSnapshot();
