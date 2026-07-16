@@ -1,21 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Button, SegmentedControl } from '@telegram-apps/telegram-ui';
+import { Button, Input, SegmentedControl } from '@telegram-apps/telegram-ui';
 import { BottomSheet } from './BottomSheet.jsx';
 import { DateTimePickerSheet, formatEventDateTime, partsToIso, toLocalParts } from './DateTimePickerSheet.jsx';
 import { ValueGroup } from './ValueGroup.jsx';
 import { ValueRow, SwitchRow } from './ValueRow.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
-import { EVENT_INTERESTS, emptyI18n, uid } from '../config/eventInterests.js';
+import {
+  EVENT_INTERESTS,
+  emptyI18n,
+  ticketDiscountLabel,
+  uid,
+} from '../config/eventInterests.js';
 
 const STEPS = 7;
-const STEP_TITLES = [
-  'Обложка',
-  'Название и описание',
+
+/** Main sheet titles — step prompts, not «Новое мероприятие» */
+const STEP_HEADINGS = [
+  'Добавьте фото',
+  'Укажите данные',
   'Когда',
   'Где',
-  'Интересы',
+  'Выберите интересы',
   'Билеты',
-  'Готово',
+  'Превью',
 ];
 
 function defaultStartEnd() {
@@ -36,8 +43,23 @@ function readPhotoAsDataUrl(file) {
   });
 }
 
+function blankTicket() {
+  return { id: uid('t'), name: '', price: 0, originalPrice: 0, capacity: 100 };
+}
+
+function ticketsValid(list) {
+  if (!list.length) return false;
+  return list.every((t) => {
+    if (!t.name.trim() || Number(t.price) <= 0 || Number(t.capacity) <= 0) return false;
+    const orig = Number(t.originalPrice) || 0;
+    if (orig > 0 && orig <= Number(t.price)) return false;
+    return true;
+  });
+}
+
 export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) {
   const fileRef = useRef(null);
+  const carouselRef = useRef(null);
   const verified = Boolean(
     snapshot?.profile?.kycStatus === 'approved'
       || snapshot?.profile?.verified
@@ -49,6 +71,7 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
   const [busy, setBusy] = useState(false);
   const [lang, setLang] = useState('ru');
   const [photos, setPhotos] = useState([]);
+  const [photoIndex, setPhotoIndex] = useState(0);
   const [title, setTitle] = useState(emptyI18n());
   const [description, setDescription] = useState(emptyI18n());
   const [startsAt, setStartsAt] = useState('');
@@ -56,6 +79,7 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
   const [locationName, setLocationName] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [interests, setInterests] = useState([]);
+  const [interestQuery, setInterestQuery] = useState('');
   const [isFree, setIsFree] = useState(true);
   const [freeEntryMode, setFreeEntryMode] = useState('approval');
   const [tickets, setTickets] = useState([]);
@@ -68,6 +92,7 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     setBusy(false);
     setLang('ru');
     setPhotos([]);
+    setPhotoIndex(0);
     setTitle(emptyI18n());
     setDescription(emptyI18n());
     setStartsAt(start);
@@ -75,6 +100,7 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     setLocationName('');
     setLocationAddress('');
     setInterests([]);
+    setInterestQuery('');
     setIsFree(true);
     setFreeEntryMode('approval');
     setTickets([]);
@@ -86,13 +112,15 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     if (step === 3) return Boolean(startsAt && endsAt && new Date(endsAt) > new Date(startsAt));
     if (step === 4) return Boolean(locationName.trim() && locationAddress.trim());
     if (step === 5) return interests.length >= 1;
-    if (step === 6) {
-      if (isFree) return true;
-      if (!tickets.length) return false;
-      return tickets.every((t) => t.name.trim() && Number(t.price) > 0 && Number(t.capacity) > 0);
-    }
+    if (step === 6) return isFree ? true : ticketsValid(tickets);
     return true;
   }, [step, photos, title, description, startsAt, endsAt, locationName, locationAddress, interests, isFree, tickets]);
+
+  const filteredInterests = useMemo(() => {
+    const q = interestQuery.trim().toLowerCase();
+    if (!q) return EVENT_INTERESTS;
+    return EVENT_INTERESTS.filter((item) => item.label.toLowerCase().includes(q));
+  }, [interestQuery]);
 
   const goNext = () => {
     if (!canNext) {
@@ -107,6 +135,11 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     haptic('light');
     if (step <= 1) onClose?.();
     else setStep((s) => s - 1);
+  };
+
+  const jumpTo = (n) => {
+    haptic('selection');
+    setStep(n);
   };
 
   const autoTranslate = () => {
@@ -143,10 +176,10 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     }
   };
 
-  const toggleInterest = (item) => {
+  const toggleInterest = (label) => {
     haptic('selection');
     setInterests((prev) =>
-      prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item],
+      prev.includes(label) ? prev.filter((x) => x !== label) : [...prev, label],
     );
   };
 
@@ -156,15 +189,31 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
       return;
     }
     setIsFree(false);
-    if (!tickets.length) {
-      setTickets([{ id: uid('t'), name: 'Standard', price: 100000, capacity: 100 }]);
-    }
+    if (!tickets.length) setTickets([blankTicket()]);
     haptic('selection');
   };
 
+  const updateTicket = (id, patch) => {
+    setTickets((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  };
+
+  const removeTicket = (id) => {
+    haptic('light');
+    setTickets((prev) => {
+      const next = prev.filter((x) => x.id !== id);
+      return next.length ? next : [blankTicket()];
+    });
+  };
+
+  const onCarouselScroll = () => {
+    const el = carouselRef.current;
+    if (!el || !photos.length) return;
+    const w = el.clientWidth || 1;
+    setPhotoIndex(Math.round(el.scrollLeft / w));
+  };
+
   const submit = async (status) => {
-    if (busy || !canNext) return;
-    // validate all steps briefly
+    if (busy) return;
     if (photos.length < 1 || !title.ru.trim() || !description.ru.trim()) {
       showError('Проверьте обложку, название и описание');
       return;
@@ -182,14 +231,30 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
         showError('Верификация обязательна для платных ивентов');
         return;
       }
-      if (!tickets.length || tickets.some((t) => !t.name.trim() || t.price <= 0 || t.capacity <= 0)) {
-        showError('Проверьте типы билетов');
+      if (!ticketsValid(tickets)) {
+        showError('Проверьте типы билетов и скидку (старая цена > цена)');
         return;
       }
     }
 
     setBusy(true);
     try {
+      const payloadTickets = isFree
+        ? []
+        : tickets.map((t) => {
+            const price = Math.max(0, Number(t.price) || 0);
+            const originalPrice = Math.max(0, Number(t.originalPrice) || 0);
+            const label = ticketDiscountLabel(price, originalPrice);
+            return {
+              id: t.id,
+              name: t.name.trim(),
+              price,
+              capacity: Math.max(0, Number(t.capacity) || 0),
+              originalPrice: originalPrice > price ? originalPrice : undefined,
+              discountLabel: label || undefined,
+            };
+          });
+
       const nextSnap = await runActionSafe('create_event', {
         name: title.ru.trim(),
         i18n: { title, description },
@@ -200,11 +265,10 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
         interests,
         isFree,
         freeEntryMode: isFree ? freeEntryMode : undefined,
-        tickets: isFree ? [] : tickets,
+        tickets: payloadTickets,
         status,
       });
       onSnapshotChange(nextSnap);
-      haptic('success');
       onClose();
     } catch (e) {
       showError(e.message || 'Не удалось создать');
@@ -213,19 +277,24 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     }
   };
 
+  const entryLabel = isFree
+    ? `Бесплатно · ${freeEntryMode === 'approval' ? 'с модерацией' : 'свободный вход'}`
+    : `Платно · ${tickets.length} тип(а)`;
+
   return (
     <>
       <BottomSheet
         open={open && !picker}
-        title="Новое мероприятие"
-        subtitle={`Шаг ${step}/${STEPS} · ${STEP_TITLES[step - 1]}`}
+        title={STEP_HEADINGS[step - 1]}
+        subtitle={`Шаг ${step}/${STEPS}`}
         className="fm-sheet-panel--wizard fm-sheet-panel--tall"
+        onBack={goBack}
         onClose={onClose}
       >
         <div className="fm-wizard-sheet">
           {step === 1 ? (
             <>
-              <p className="fm-media-hint">Добавьте хотя бы одно фото (до 6)</p>
+              <p className="fm-media-hint">Хотя бы одно фото, максимум 6</p>
               <div className="fm-photo-grid">
                 {photos.map((src, idx) => (
                   <div key={idx} className="fm-photo-tile">
@@ -281,14 +350,13 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
                   Автоперевод
                 </button>
               </div>
-              <p className="fm-media-hint">Название ({lang.toUpperCase()})</p>
-              <input
-                className="fm-wizard-input"
+              <Input
+                header={`Название (${lang.toUpperCase()})`}
                 placeholder="Название события"
                 value={title[lang]}
                 onChange={(e) => setTitle((prev) => ({ ...prev, [lang]: e.target.value }))}
               />
-              <p className="fm-media-hint" style={{ marginTop: 12 }}>Описание ({lang.toUpperCase()})</p>
+              <label className="fm-field-label">Описание ({lang.toUpperCase()})</label>
               <textarea
                 className="fm-wizard-input fm-wizard-input--area"
                 placeholder="Расскажите о событии..."
@@ -308,16 +376,14 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
 
           {step === 4 ? (
             <>
-              <p className="fm-media-hint">Название места</p>
-              <input
-                className="fm-wizard-input"
+              <Input
+                header="Название места"
                 placeholder="Офис Taneesh, Magic City…"
                 value={locationName}
                 onChange={(e) => setLocationName(e.target.value)}
               />
-              <p className="fm-media-hint" style={{ marginTop: 12 }}>Адрес или ссылка на карту</p>
-              <input
-                className="fm-wizard-input"
+              <Input
+                header="Адрес или ссылка на карту"
                 placeholder="Адрес / Google Maps"
                 value={locationAddress}
                 onChange={(e) => setLocationAddress(e.target.value)}
@@ -327,18 +393,24 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
 
           {step === 5 ? (
             <>
-              <p className="fm-media-hint">Выберите хотя бы один интерес</p>
+              <Input
+                header="Поиск"
+                placeholder="Найти интерес"
+                value={interestQuery}
+                onChange={(e) => setInterestQuery(e.target.value)}
+              />
+              <p className="fm-media-hint">Выберите хотя бы один · {interests.length} выбрано</p>
               <div className="fm-chip-wrap">
-                {EVENT_INTERESTS.map((item) => {
-                  const on = interests.includes(item);
+                {filteredInterests.map((item) => {
+                  const on = interests.includes(item.label);
                   return (
                     <button
-                      key={item}
+                      key={item.id}
                       type="button"
                       className={`fm-chip${on ? ' fm-chip--on' : ''}`}
-                      onClick={() => toggleInterest(item)}
+                      onClick={() => toggleInterest(item.label)}
                     >
-                      {item}
+                      <span aria-hidden>{item.emoji}</span> {item.label}
                     </button>
                   );
                 })}
@@ -363,125 +435,189 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
               </div>
 
               {isFree ? (
-                <ValueGroup className="fm-value-group--spaced">
-                  <SwitchRow
-                    label="Модерация заявок"
-                    checked={freeEntryMode === 'approval'}
-                    onChange={(on) => setFreeEntryMode(on ? 'approval' : 'open')}
-                    last
-                  />
-                </ValueGroup>
+                <>
+                  <ValueGroup className="fm-value-group--spaced">
+                    <SwitchRow
+                      label="Модерация заявок"
+                      checked={freeEntryMode === 'approval'}
+                      onChange={(on) => setFreeEntryMode(on ? 'approval' : 'open')}
+                      last
+                    />
+                  </ValueGroup>
+                  <p className="fm-empty-hint">
+                    {freeEntryMode === 'approval'
+                      ? 'Заявки нужно будет одобрять вручную'
+                      : 'Регистрация сразу даёт билет'}
+                  </p>
+                </>
               ) : (
                 <div className="fm-ticket-list">
-                  {tickets.map((t, idx) => (
-                    <div key={t.id} className="fm-ticket-card">
-                      <input
-                        className="fm-wizard-input"
-                        placeholder="Название типа"
-                        value={t.name}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          setTickets((prev) => prev.map((x) => (x.id === t.id ? { ...x, name } : x)));
-                        }}
-                      />
-                      <div className="fm-ticket-row">
-                        <input
-                          className="fm-wizard-input"
+                  {tickets.map((t, idx) => {
+                    const disc = ticketDiscountLabel(t.price, t.originalPrice);
+                    return (
+                      <div key={t.id} className="fm-ticket-card">
+                        <div className="fm-ticket-card-head">
+                          <span className="fm-ticket-card-title">Тип {idx + 1}</span>
+                          <button
+                            type="button"
+                            className="fm-ticket-remove"
+                            onClick={() => removeTicket(t.id)}
+                          >
+                            Удалить
+                          </button>
+                        </div>
+                        <Input
+                          header="Название"
+                          placeholder="Standard, VIP…"
+                          value={t.name}
+                          onChange={(e) => updateTicket(t.id, { name: e.target.value })}
+                        />
+                        <div className="fm-ticket-row">
+                          <Input
+                            header="Цена"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="0"
+                            value={t.price || ''}
+                            onChange={(e) => updateTicket(t.id, { price: Number(e.target.value) || 0 })}
+                          />
+                          <Input
+                            header="Старая цена"
+                            type="number"
+                            inputMode="numeric"
+                            placeholder="Скидка"
+                            value={t.originalPrice || ''}
+                            onChange={(e) => updateTicket(t.id, { originalPrice: Number(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <Input
+                          header="Количество"
                           type="number"
                           inputMode="numeric"
-                          placeholder="Цена"
-                          value={t.price}
-                          onChange={(e) => {
-                            const price = Number(e.target.value) || 0;
-                            setTickets((prev) => prev.map((x) => (x.id === t.id ? { ...x, price } : x)));
-                          }}
+                          placeholder="100"
+                          value={t.capacity || ''}
+                          onChange={(e) => updateTicket(t.id, { capacity: Number(e.target.value) || 0 })}
                         />
-                        <input
-                          className="fm-wizard-input"
-                          type="number"
-                          inputMode="numeric"
-                          placeholder="Кол-во"
-                          value={t.capacity}
-                          onChange={(e) => {
-                            const capacity = Number(e.target.value) || 0;
-                            setTickets((prev) => prev.map((x) => (x.id === t.id ? { ...x, capacity } : x)));
-                          }}
-                        />
+                        {disc ? (
+                          <p className="fm-ticket-discount-badge">Скидка {disc}</p>
+                        ) : (
+                          <p className="fm-empty-hint" style={{ margin: 0 }}>
+                            Старая цена необязательна — если больше цены, покажем скидку
+                          </p>
+                        )}
                       </div>
-                      {tickets.length > 1 ? (
-                        <button
-                          type="button"
-                          className="fm-ticket-remove"
-                          onClick={() => setTickets((prev) => prev.filter((x) => x.id !== t.id))}
-                        >
-                          Удалить тип {idx + 1}
-                        </button>
-                      ) : null}
-                    </div>
-                  ))}
+                    );
+                  })}
                   <Button
                     mode="outline"
-                    size="m"
+                    size="l"
                     stretched
-                    onClick={() =>
-                      setTickets((prev) => [
-                        ...prev,
-                        { id: uid('t'), name: '', price: 0, capacity: 50 },
-                      ])
-                    }
+                    onClick={() => {
+                      haptic('selection');
+                      setTickets((prev) => [...prev, blankTicket()]);
+                    }}
                   >
                     + Добавить тип билета
                   </Button>
                 </div>
               )}
-              {isFree ? (
-                <p className="fm-empty-hint" style={{ marginTop: 10 }}>
-                  {freeEntryMode === 'approval'
-                    ? 'Заявки нужно будет одобрять вручную'
-                    : 'Регистрация сразу даёт билет'}
-                </p>
-              ) : null}
             </>
           ) : null}
 
           {step === 7 ? (
             <div className="fm-review">
-              {photos[0] ? <img src={photos[0]} alt="" className="fm-review-cover" /> : null}
+              {photos.length ? (
+                <div className="fm-review-carousel-wrap">
+                  <div
+                    ref={carouselRef}
+                    className="fm-review-carousel"
+                    onScroll={onCarouselScroll}
+                  >
+                    {photos.map((src, i) => (
+                      <div key={i} className="fm-review-slide">
+                        <img src={src} alt="" />
+                      </div>
+                    ))}
+                  </div>
+                  {photos.length > 1 ? (
+                    <div className="fm-review-dots">
+                      {photos.map((_, i) => (
+                        <span
+                          key={i}
+                          className={`fm-review-dot${i === photoIndex ? ' fm-review-dot--on' : ''}`}
+                        />
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+
               <h3 className="fm-review-title">{title.ru || 'Без названия'}</h3>
-              <p className="fm-review-line">{formatEventDateTime(startsAt)} → {formatEventDateTime(endsAt)}</p>
-              <p className="fm-review-line">{locationName} · {locationAddress}</p>
-              <p className="fm-review-line">{interests.join(' · ')}</p>
-              <p className="fm-review-line">
-                {isFree
-                  ? `Бесплатно · ${freeEntryMode === 'approval' ? 'с модерацией' : 'свободный вход'}`
-                  : `Платно · ${tickets.length} тип(а) билетов`}
-              </p>
+              {description.ru ? (
+                <p className="fm-review-desc">{description.ru}</p>
+              ) : null}
+
+              <ValueGroup className="fm-value-group--spaced">
+                <ValueRow label="Фото" value={`${photos.length} из 6`} onClick={() => jumpTo(1)} />
+                <ValueRow label="Название" value={title.ru || '—'} onClick={() => jumpTo(2)} />
+                <ValueRow
+                  label="Начало"
+                  value={formatEventDateTime(startsAt)}
+                  onClick={() => jumpTo(3)}
+                />
+                <ValueRow
+                  label="Конец"
+                  value={formatEventDateTime(endsAt)}
+                  onClick={() => jumpTo(3)}
+                />
+                <ValueRow
+                  label="Место"
+                  value={[locationName, locationAddress].filter(Boolean).join(' · ') || '—'}
+                  onClick={() => jumpTo(4)}
+                />
+                <ValueRow
+                  label="Интересы"
+                  value={interests.join(', ') || '—'}
+                  onClick={() => jumpTo(5)}
+                />
+                <ValueRow
+                  label="Вход"
+                  value={entryLabel}
+                  onClick={() => jumpTo(6)}
+                  last={isFree}
+                />
+                {!isFree
+                  ? tickets.map((t, i) => (
+                      <ValueRow
+                        key={t.id}
+                        label={t.name || `Билет ${i + 1}`}
+                        value={`${Number(t.price).toLocaleString('ru-RU')} UZS · ${t.capacity} шт.${
+                          ticketDiscountLabel(t.price, t.originalPrice)
+                            ? ` · ${ticketDiscountLabel(t.price, t.originalPrice)}`
+                            : ''
+                        }`}
+                        onClick={() => jumpTo(6)}
+                        last={i === tickets.length - 1}
+                      />
+                    ))
+                  : null}
+              </ValueGroup>
             </div>
           ) : null}
 
           <div className="fm-wizard-sheet-cta fm-wizard-sheet-cta--separated">
             {step < STEPS ? (
-              <div className="fm-wizard-nav">
-                <Button mode="outline" size="l" stretched onClick={goBack}>
-                  {step === 1 ? 'Закрыть' : '← Назад'}
-                </Button>
-                <Button mode="filled" size="l" stretched disabled={!canNext} onClick={goNext}>
-                  Далее →
-                </Button>
-              </div>
+              <Button mode="filled" size="l" stretched disabled={!canNext} onClick={goNext}>
+                Далее →
+              </Button>
             ) : (
-              <div className="fm-wizard-nav fm-wizard-nav--final">
-                <Button mode="outline" size="l" stretched onClick={goBack}>
-                  ← Назад
+              <div className="fm-wizard-nav-pair">
+                <Button mode="outline" size="l" stretched disabled={busy} onClick={() => submit('draft')}>
+                  Черновик
                 </Button>
-                <div className="fm-wizard-nav-pair">
-                  <Button mode="outline" size="l" stretched disabled={busy} onClick={() => submit('draft')}>
-                    Черновик
-                  </Button>
-                  <Button mode="filled" size="l" stretched disabled={busy} onClick={() => submit('published')}>
-                    Опубликовать
-                  </Button>
-                </div>
+                <Button mode="filled" size="l" stretched disabled={busy} onClick={() => submit('published')}>
+                  Опубликовать
+                </Button>
               </div>
             )}
           </div>

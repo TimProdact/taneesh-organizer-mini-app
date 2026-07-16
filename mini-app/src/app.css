@@ -729,17 +729,55 @@ html, body, #root {
 .fm-sheet-title {
   font-weight: 700;
   text-align: center;
-  font-size: 1rem;
+  font-size: 1.05rem;
+  line-height: 1.25;
 }
 
 .fm-sheet-header {
   padding: 8px var(--fm-space-page) 12px;
 }
 
+.fm-sheet-header--with-back {
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: start;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.fm-sheet-back {
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: transparent;
+  color: var(--tg-theme-link-color, var(--tg-theme-button-color, #007aff));
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.fm-sheet-back-spacer {
+  width: 40px;
+  height: 40px;
+}
+
+.fm-sheet-header-text {
+  min-width: 0;
+  text-align: center;
+}
+
+.fm-sheet-header--with-back .fm-sheet-title,
+.fm-sheet-header--with-back .fm-sheet-subtitle {
+  text-align: center;
+}
+
 .fm-sheet-subtitle {
   margin-top: 2px;
   text-align: center;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--tg-theme-hint-color);
 }
@@ -1706,10 +1744,22 @@ button.fm-value-row {
 .fm-ticket-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   padding: 12px;
   border-radius: 14px;
   background: color-mix(in srgb, var(--tg-theme-hint-color) 8%, transparent);
+}
+
+.fm-ticket-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fm-ticket-card-title {
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .fm-ticket-row {
@@ -1722,16 +1772,81 @@ button.fm-value-row {
   border: none;
   background: transparent;
   color: var(--tg-theme-destructive-text-color, #e53935);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  text-align: left;
   padding: 0;
+  cursor: pointer;
+}
+
+.fm-ticket-discount-badge {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--tg-theme-button-color, #007aff);
+}
+
+.fm-field-label {
+  display: block;
+  margin: 4px 0 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--tg-theme-hint-color);
 }
 
 .fm-review {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+}
+
+.fm-review-carousel-wrap {
+  position: relative;
+}
+
+.fm-review-carousel {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 14px;
+  scrollbar-width: none;
+}
+
+.fm-review-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.fm-review-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  scroll-snap-align: start;
+  aspect-ratio: 16 / 9;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 12%, transparent);
+}
+
+.fm-review-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.fm-review-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.fm-review-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 45%, transparent);
+}
+
+.fm-review-dot--on {
+  background: var(--tg-theme-button-color, #007aff);
 }
 
 .fm-review-cover {
@@ -1747,6 +1862,14 @@ button.fm-value-row {
   font-size: 20px;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.fm-review-desc {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tg-theme-hint-color);
+  white-space: pre-wrap;
 }
 
 .fm-review-line {

@@ -237,6 +237,10 @@ export async function runAction(adminAction, payload = {}) {
             name: String(t.name || '').trim(),
             price: Math.max(0, Number(t.price) || 0),
             capacity: Math.max(0, Number(t.capacity) || 0),
+            originalPrice: t.originalPrice != null && Number(t.originalPrice) > Number(t.price)
+              ? Number(t.originalPrice)
+              : undefined,
+            discountLabel: t.discountLabel ? String(t.discountLabel) : undefined,
           })),
       ticketsLeft,
       ticketsTotal,
