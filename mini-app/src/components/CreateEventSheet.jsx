@@ -334,7 +334,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
         <div className="fm-wizard-sheet">
           {step === 1 ? (
             <>
-              <p className="fm-media-hint">Хотя бы одно фото, максимум 6</p>
+              <p className="fm-media-hint">Хотя бы одно фото</p>
               <div className="fm-photo-grid">
                 {Array.from({ length: 6 }).map((_, idx) => {
                   const src = photos[idx];

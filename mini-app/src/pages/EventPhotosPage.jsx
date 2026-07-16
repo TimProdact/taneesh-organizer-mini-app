@@ -2,7 +2,6 @@ import { useMemo, useRef, useState } from 'react';
 import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { StickyPageCta } from '../components/StickyPageCta.jsx';
-import { FieldSheet } from '../components/FieldSheet.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
 
 const MAX = 6;
@@ -34,7 +33,6 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
 
   const [photos, setPhotos] = useState(() => [...(event.photos || [])].slice(0, MAX));
   const [busy, setBusy] = useState(false);
-  const [urlSheet, setUrlSheet] = useState(false);
   const fileRef = useRef(null);
 
   const dirty = JSON.stringify(photos) !== JSON.stringify([...(event.photos || [])].slice(0, MAX));
@@ -80,26 +78,14 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
     await persist(next);
   };
 
-  const addUrl = async (raw) => {
-    const url = raw.trim();
-    if (!url) throw new Error('Введите ссылку');
-    if (photos.length >= MAX) throw new Error(`Максимум ${MAX} фото`);
-    const next = [...photos, url].slice(0, MAX);
-    setPhotos(next);
-    await persist(next);
-    setUrlSheet(false);
-  };
-
-  const showCta = photos.length < MAX || dirty;
-
   return (
-    <SubpageLayout stickyCta={showCta}>
+    <SubpageLayout stickyCta={dirty}>
       <PageHeader
         title="Фото"
         subtitle={photosSummary(photos.length)}
       />
       <List className="fm-page-list">
-        <p className="fm-media-hint">Хотя бы одно фото, максимум {MAX}</p>
+        <p className="fm-media-hint">Хотя бы одно фото</p>
         <div className="fm-photo-grid">
           {Array.from({ length: MAX }).map((_, idx) => {
             const src = photos[idx];
@@ -144,41 +130,19 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
         />
       </List>
 
-      {showCta ? (
+      {dirty ? (
         <StickyPageCta>
-          {photos.length < MAX ? (
-            <Button
-              mode="outline"
-              size="l"
-              stretched
-              disabled={busy}
-              onClick={() => setUrlSheet(true)}
-            >
-              Добавить по ссылке
-            </Button>
-          ) : null}
-          {dirty ? (
-            <Button
-              mode="filled"
-              size="l"
-              stretched
-              disabled={busy}
-              onClick={() => persist(photos)}
-            >
-              Сохранить
-            </Button>
-          ) : null}
+          <Button
+            mode="filled"
+            size="l"
+            stretched
+            disabled={busy}
+            onClick={() => persist(photos)}
+          >
+            Сохранить
+          </Button>
         </StickyPageCta>
       ) : null}
-
-      <FieldSheet
-        open={urlSheet}
-        title="Ссылка на фото"
-        value=""
-        placeholder="https://..."
-        onClose={() => setUrlSheet(false)}
-        onSave={addUrl}
-      />
     </SubpageLayout>
   );
 }
