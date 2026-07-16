@@ -6,27 +6,27 @@ import { eventEntryLabel, formatEventDate, phaseLabel } from '../utils.js';
 import { haptic } from '../api.js';
 import { SCREENS } from '../navigation/screens.js';
 
-/** Filters mirror admin EventList: upcoming | past | drafts | archive */
-function matchesFilter(event, filter) {
+const ARCHIVE_STATUSES = new Set(['cancelled', 'rejected', 'archived', 'hidden', 'deleted']);
+
+/** Active vs Archive — archive = прошедшие, отменённые, черновики */
+function isArchivedEvent(event) {
   const now = Date.now();
   const start = event.startsAt ? new Date(event.startsAt).getTime() : now;
   const isPast = start < now;
   const status = event.status || 'published';
   const phase = event.phase;
 
-  if (filter === 'upcoming') {
-    return !isPast && status !== 'draft' && phase !== 'draft' && event.visible !== false;
-  }
-  if (filter === 'past') {
-    return isPast && status !== 'draft';
-  }
-  if (filter === 'drafts') {
-    return status === 'draft' || phase === 'draft';
-  }
-  if (filter === 'archive') {
-    return event.visible === false || phase === 'sold_out';
-  }
-  return true;
+  if (status === 'draft' || phase === 'draft') return true;
+  if (ARCHIVE_STATUSES.has(status)) return true;
+  if (event.visible === false) return true;
+  if (isPast) return true;
+  return false;
+}
+
+function matchesFilter(event, filter) {
+  const archived = isArchivedEvent(event);
+  if (filter === 'archive') return archived;
+  return !archived;
 }
 
 function eventSubtitle(event) {
@@ -40,23 +40,29 @@ function eventSubtitle(event) {
 export function EventsListPage({ snapshot, onSnapshotChange, push }) {
   const events = snapshot.events || [];
   const [createOpen, setCreateOpen] = useState(false);
-  const [filter, setFilter] = useState('upcoming');
+  const [filter, setFilter] = useState('active');
 
   const filtered = useMemo(
     () => events.filter((e) => matchesFilter(e, filter)),
     [events, filter],
   );
 
+  const activeCount = useMemo(
+    () => events.filter((e) => !isArchivedEvent(e)).length,
+    [events],
+  );
+
   return (
     <SubpageLayout>
-      <PageHeader title="Мероприятия" subtitle={`${events.length} всего`} />
+      <PageHeader
+        title="Мероприятия"
+        subtitle={filter === 'archive' ? `${filtered.length} в архиве` : `${activeCount} активных`}
+      />
       <List className="fm-page-list">
         <div className="fm-segment-wrap fm-segment-wrap--media">
           <SegmentedControl>
             {[
-              { id: 'upcoming', label: 'Скоро' },
-              { id: 'past', label: 'Прошедшие' },
-              { id: 'drafts', label: 'Черновики' },
+              { id: 'active', label: 'Активные' },
               { id: 'archive', label: 'Архив' },
             ].map((f) => (
               <SegmentedControl.Item
@@ -99,11 +105,11 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
           </Section>
         ) : (
           <Placeholder
-            header="Нет мероприятий"
+            header={filter === 'archive' ? 'Архив пуст' : 'Нет активных'}
             description={
-              filter === 'drafts'
-                ? 'Черновиков пока нет'
-                : 'Создай первое — обложка, описание, место и билеты'
+              filter === 'archive'
+                ? 'Сюда попадают прошедшие, отменённые и черновики'
+                : 'Создай первое — фото, описание, место и билеты'
             }
           />
         )}
