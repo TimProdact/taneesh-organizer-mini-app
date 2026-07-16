@@ -1,31 +1,46 @@
+import {
+  Avatar,
+  Badge,
+  Banner,
+  Button,
+  Cell,
+  IconButton,
+  List,
+  Navigation,
+  Section,
+} from '@telegram-apps/telegram-ui';
 import { Icon24QR } from '@telegram-apps/telegram-ui/dist/icons/24/qr';
-import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
-import { MenuGroup, MenuRow } from '../components/MenuRow.jsx';
 import { HubHeroMeta } from '../components/HubHeroMeta.jsx';
 import { pendingOrders, profileOf, publicPageUrl } from '../utils.js';
 import { haptic } from '../api.js';
 import { SCREENS } from '../navigation/screens.js';
 
+/** Sidebar labels from admin `AppSidebar.tsx` + Legal documents block */
 function kycBannerCopy(status) {
   if (status === 'pending') {
     return {
-      title: 'KYC на проверке',
-      body: 'Заявка у модератора · обычно до 24 часов',
-      tone: 'pending',
+      header: 'KYC на проверке',
+      description: 'Заявка у модератора · обычно до 24 часов',
     };
   }
   if (status === 'rejected') {
     return {
-      title: 'KYC отклонён',
-      body: 'Исправьте данные и отправьте снова',
-      tone: 'rejected',
+      header: 'KYC отклонён',
+      description: 'Исправьте данные и отправьте снова во вкладке Реквизиты',
     };
   }
   return {
-    title: 'KYC не пройден',
-    body: 'Нужен для платных событий и выплат',
-    tone: 'idle',
+    header: 'Требуется верификация',
+    description: 'Для платных событий и выплат подтвердите данные (как в админке → Реквизиты)',
   };
+}
+
+function MenuIcon({ tone, children }) {
+  return (
+    <span className="fm-hub-cell-icon" style={{ backgroundColor: tone }} aria-hidden>
+      {children}
+    </span>
+  );
 }
 
 export function HubPage({ snapshot, push }) {
@@ -48,113 +63,135 @@ export function HubPage({ snapshot, push }) {
     else window.open(url, '_blank', 'noopener');
   };
 
+  const go = (screen, params) => {
+    haptic('selection');
+    push(screen, params);
+  };
+
   return (
     <main className="fm-twa fm-home fm-hub">
       <header className="fm-hub-hero">
         <div className="fm-hub-hero-bar">
-          <button
-            type="button"
-            className="fm-hub-hero-round-btn"
+          <IconButton
+            mode="bezeled"
+            size="m"
             aria-label="QR-код страницы"
-            onClick={() => {
-              haptic('light');
-              push(SCREENS.ORG_QR);
-            }}
+            onClick={() => go(SCREENS.ORG_QR)}
           >
             <Icon24QR />
-          </button>
-          <button
-            type="button"
-            className="fm-hub-hero-edit-btn"
-            onClick={() => {
-              haptic('selection');
-              push(SCREENS.PROFILE_EDIT);
-            }}
+          </IconButton>
+          <Button
+            mode="bezeled"
+            size="s"
+            onClick={() => go(SCREENS.PROFILE_EDIT)}
           >
             Edit
-          </button>
+          </Button>
         </div>
 
         <div className="fm-hub-hero-center">
-          <div className="fm-hub-avatar" aria-hidden>
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="fm-hub-avatar-img" />
-            ) : (
-              <span className="fm-hub-avatar-emoji">{logoEmoji}</span>
-            )}
-          </div>
+          <Avatar
+            size={96}
+            src={avatarUrl || undefined}
+            fallbackIcon={
+              avatarUrl ? undefined : (
+                <span className="fm-hub-avatar-emoji">{logoEmoji}</span>
+              )
+            }
+            className="fm-hub-avatar-tgui"
+          />
           <h1 className="fm-hub-title">{displayName}</h1>
           <HubHeroMeta snapshot={snapshot} />
         </div>
       </header>
 
-      <div className="fm-hub-stack">
+      <List className="fm-hub-list">
         {showKyc ? (
-          <button
-            type="button"
-            className={`fm-hub-kyc fm-hub-kyc--${kycCopy.tone} fm-tap`}
-            onClick={() => {
-              haptic('selection');
-              push(SCREENS.KYC);
-            }}
+          <Banner
+            type="section"
+            header={kycCopy.header}
+            description={kycCopy.description}
+            onClick={() => go(SCREENS.KYC)}
+            className="fm-hub-kyc-banner"
           >
-            <span className="fm-hub-kyc-glyph" aria-hidden>🛡️</span>
-            <span className="fm-hub-kyc-copy">
-              <span className="fm-hub-kyc-title">{kycCopy.title}</span>
-              <span className="fm-hub-kyc-body">{kycCopy.body}</span>
-            </span>
-            <Icon24ChevronRight className="fm-hub-kyc-chevron" />
-          </button>
+            <Button
+              size="s"
+              mode="filled"
+              onClick={(e) => {
+                e.stopPropagation();
+                go(SCREENS.KYC);
+              }}
+            >
+              Реквизиты
+            </Button>
+          </Banner>
         ) : null}
 
-        <MenuGroup>
-          <MenuRow
-            label="Мероприятия"
-            glyph="📅"
-            tone="#007aff"
-            value={String(snapshot.meta?.eventsCount ?? events.length)}
-            onClick={() => push(SCREENS.EVENTS)}
-          />
-          <MenuRow
-            label="Аудитория"
-            glyph="👥"
-            tone="#af52de"
-            value={String(snapshot.meta?.audienceCount ?? 0)}
-            onClick={() => push(SCREENS.AUDIENCE)}
-          />
-          <MenuRow
-            label="Контролеры"
-            glyph="📷"
-            tone="#ff9500"
-            value={String(snapshot.meta?.controllersCount ?? 0)}
-            onClick={() => push(SCREENS.CONTROLLERS)}
-          />
-          <MenuRow
-            label="Финансы"
-            glyph="💳"
-            tone="#34c759"
-            badge={pending.length || undefined}
-            onClick={() => push(SCREENS.FINANCE)}
-            last
-          />
-        </MenuGroup>
+        <Section>
+          <Cell
+            before={<MenuIcon tone="#007aff">📅</MenuIcon>}
+            after={(
+              <Navigation>
+                {String(snapshot.meta?.eventsCount ?? events.length)}
+              </Navigation>
+            )}
+            onClick={() => go(SCREENS.EVENTS)}
+          >
+            Мероприятия
+          </Cell>
+          <Cell
+            before={<MenuIcon tone="#af52de">👥</MenuIcon>}
+            after={(
+              <Navigation>
+                {String(snapshot.meta?.audienceCount ?? 0)}
+              </Navigation>
+            )}
+            onClick={() => go(SCREENS.AUDIENCE)}
+          >
+            Аудитория (CRM)
+          </Cell>
+          <Cell
+            before={<MenuIcon tone="#ff9500">📷</MenuIcon>}
+            after={(
+              <Navigation>
+                {String(snapshot.meta?.controllersCount ?? 0)}
+              </Navigation>
+            )}
+            onClick={() => go(SCREENS.CONTROLLERS)}
+          >
+            Контролеры
+          </Cell>
+          <Cell
+            before={<MenuIcon tone="#34c759">💳</MenuIcon>}
+            after={(
+              <Navigation>
+                {pending.length > 0 ? (
+                  <Badge type="number">{pending.length}</Badge>
+                ) : null}
+              </Navigation>
+            )}
+            onClick={() => go(SCREENS.FINANCE)}
+          >
+            Финансы
+          </Cell>
+        </Section>
 
-        <MenuGroup>
-          <MenuRow
-            label="Документы"
-            glyph="📄"
-            tone="#8e8e93"
-            onClick={() => push(SCREENS.DOCUMENTS)}
-            last
-          />
-        </MenuGroup>
+        <Section header="Юридическое">
+          <Cell
+            before={<MenuIcon tone="#8e8e93">📄</MenuIcon>}
+            after={<Navigation />}
+            onClick={() => go(SCREENS.DOCUMENTS)}
+          >
+            Документы
+          </Cell>
+        </Section>
 
         <div className="fm-hub-cta">
-          <button type="button" className="fm-hub-cta-btn" onClick={openPublicPage}>
+          <Button mode="filled" size="l" stretched onClick={openPublicPage}>
             Открыть страницу
-          </button>
+          </Button>
         </div>
-      </div>
+      </List>
 
       <footer className="fm-hub-footer">
         <span>@taneesh_org_bot</span>

@@ -1085,6 +1085,30 @@ html, body, #root {
   cursor: pointer;
 }
 
+.fm-hub-list {
+  padding-bottom: 8px;
+}
+
+.fm-hub-cell-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.fm-hub-kyc-banner {
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+
+.fm-hub-avatar-tgui {
+  margin: 0 auto;
+}
+
 /* Product preview */
 .fm-product-preview {
   border-radius: 20px;
