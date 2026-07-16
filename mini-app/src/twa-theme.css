@@ -12,6 +12,7 @@
   --fm-space-card: 12px;
   --fm-space-card-x: 16px;
   --fm-space-card-bottom: 14px;
+  --fm-cell-py: 16px; /* top/bottom inside Cell rows */
   --fm-gap-row: 16px;
   --fm-gap-tight: 8px;
   --fm-gap-micro: 6px;
@@ -267,7 +268,7 @@ html[data-tgui-platform='android'] body {
   gap: 16px !important;
   padding-left: 16px !important;
   padding-right: 16px !important;
-  --tgui--cell--middle--padding: 12px 0;
+  --tgui--cell--middle--padding: var(--fm-cell-py) 0;
 }
 
 /* Kit Section dividers are missing inset styles — restore Settings look */
