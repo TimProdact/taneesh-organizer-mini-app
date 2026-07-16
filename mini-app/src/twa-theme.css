@@ -1,0 +1,528 @@
+/**
+ * Native Telegram Mini App (TWA) visual layer for For me.
+ * Uses --tg-theme-* from WebApp API; no hardcoded light/dark colors.
+ */
+
+:root {
+  /* ── Spacing (Social card reference) ── */
+  --fm-space-page: 20px;
+  --fm-space-section: 12px;
+  --fm-space-card: 12px;
+  --fm-space-card-x: 14px;
+  --fm-space-card-bottom: 14px;
+  --fm-gap-row: 12px;
+  --fm-gap-tight: 8px;
+  --fm-gap-micro: 6px;
+  --fm-gap-stack: 2px;
+
+  /* ── Icons ── */
+  --fm-icon-sm: 20px;
+  --fm-icon-md: 30px;
+  --fm-icon-lg: 40px;
+  --fm-icon-glyph: 22px;
+  --fm-radius-icon: 8px;
+  --fm-chevron-opacity: 0.35;
+
+  /* ── Radius ── */
+  --fm-radius-card: 12px;
+  --fm-radius-tile: 16px;
+  --fm-radius-chip: 10px;
+  --fm-radius-input: 8px;
+  --fm-radius-pill: 999px;
+
+  /* ── Dividers ── */
+  --fm-separator: color-mix(in srgb, var(--tg-theme-hint-color, #8e8e93) 18%, transparent);
+  --fm-divider-weight: 0.5px;
+  --fm-divider-inset-md: calc(var(--fm-space-card-x) + var(--fm-icon-md) + var(--fm-gap-row));
+  --fm-divider-inset-lg: calc(var(--fm-space-card-x) + var(--fm-icon-lg) + var(--fm-gap-row));
+
+  /* ── Pills / chips ── */
+  --fm-pill-py: 6px;
+  --fm-pill-px: 10px;
+  --fm-dot-sm: 7px;
+
+  /* ── Product manage card ── */
+  --fm-product-thumb-min: 96px;
+  --fm-product-thumb-max: 124px;
+  --fm-product-thumb-share: 34%;
+  --fm-product-meta-h: 28px;
+  --fm-product-drag: var(--fm-icon-md);
+  --fm-product-drag-inset: var(--fm-gap-tight);
+  --fm-product-drag-bg: color-mix(in srgb, #fff 38%, transparent);
+  --fm-text-product-title: 1rem;
+  --fm-text-product-price: 0.9375rem;
+  --fm-text-product-meta: 0.8125rem;
+
+  /* Canvas = grouped list background; surface = elevated card */
+  --fm-canvas-bg: var(--tg-theme-secondary-bg-color, #f2f2f7);
+  --fm-surface-bg: var(--tg-theme-bg-color, #ffffff);
+  --fm-tile-bg: color-mix(in srgb, var(--tg-theme-hint-color, #8e8e93) 9%, var(--fm-surface-bg));
+  --fm-section-bg: var(--fm-surface-bg);
+  --fm-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+  --fm-font-android: 'Roboto', system-ui, sans-serif;
+  --fm-text-large: clamp(28px, 7vw, 32px);
+  --fm-text-title: 20px;
+  --fm-text-headline: 17px;
+  --fm-text-page-title: 18px;
+  --fm-page-header-pt: 24px;
+  --fm-page-header-px: 20px;
+  --fm-page-header-pb: 20px;
+  --fm-text-body: 15px;
+  --fm-text-caption: 12px;
+}
+
+html, body, #root {
+  font-family: var(--fm-font);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background: var(--fm-canvas-bg);
+  color: var(--tg-theme-text-color);
+}
+
+html[data-tgui-platform='android'] body {
+  font-family: var(--fm-font-android);
+}
+
+.fm-twa {
+  color: var(--tg-theme-text-color);
+  background: var(--fm-canvas-bg);
+  min-height: 100%;
+}
+
+.fm-scroll--hub {
+  background: var(--fm-canvas-bg);
+}
+
+/* ── Typography ── */
+.fm-large-title {
+  margin: 0;
+  padding: 4px var(--fm-space-page) 2px;
+  font-size: var(--fm-text-large);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  color: var(--tg-theme-text-color);
+}
+
+.fm-inset-section-label {
+  margin: 0;
+  padding: 0 0 var(--fm-gap-tight);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--tg-theme-hint-color);
+}
+
+/* ── Design system primitives ── */
+.fm-ds-row-grid--cta {
+  display: grid;
+  grid-template-columns: var(--fm-icon-md) 1fr var(--fm-icon-sm);
+  align-items: center;
+  gap: var(--fm-gap-row);
+}
+
+.fm-ds-card-pad {
+  padding: var(--fm-space-card) var(--fm-space-card-x) var(--fm-space-card-bottom);
+}
+
+.fm-ds-section-split {
+  margin-top: var(--fm-space-card);
+  padding-top: var(--fm-space-card);
+  border-top: var(--fm-divider-weight) solid var(--fm-separator);
+}
+
+.fm-ds-row-grid {
+  display: grid;
+  grid-template-columns: var(--fm-icon-md) 1fr auto var(--fm-icon-sm);
+  align-items: center;
+  gap: var(--fm-gap-row);
+}
+
+.fm-ds-icon-md {
+  width: var(--fm-icon-md);
+  height: var(--fm-icon-md);
+  border-radius: var(--fm-radius-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+}
+
+.fm-ds-icon-md svg,
+.fm-ds-icon-md [class*='Icon'] {
+  width: var(--fm-icon-glyph);
+  height: var(--fm-icon-glyph);
+}
+
+.fm-ds-chevron {
+  width: var(--fm-icon-sm);
+  height: var(--fm-icon-sm);
+  min-width: var(--fm-icon-sm);
+  opacity: var(--fm-chevron-opacity);
+  flex-shrink: 0;
+  display: block;
+  overflow: visible;
+}
+
+.fm-ds-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fm-gap-micro);
+  max-width: 100%;
+  padding: var(--fm-pill-py) var(--fm-pill-px);
+  border-radius: var(--fm-radius-pill);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 10%, transparent);
+  color: var(--tg-theme-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fm-ds-pill-dot {
+  width: var(--fm-dot-sm);
+  height: var(--fm-dot-sm);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.fm-ds-pill-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--fm-gap-tight);
+}
+
+/* ── In-set card groups (Variant A) ── */
+.fm-hub-inset,
+.fm-subpage-inset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-section);
+  padding: 0 var(--fm-space-page) calc(20px + env(safe-area-inset-bottom));
+}
+
+.fm-inset-section-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-gap-tight);
+}
+
+.fm-inset-card {
+  background: var(--fm-section-bg);
+  border-radius: var(--fm-radius-card);
+  overflow: hidden;
+}
+
+.fm-inset-card--flush {
+  padding: 0;
+}
+
+.fm-inset-card .fm-stats-row,
+.fm-inset-card .fm-segment-wrap,
+.fm-inset-card .fm-vitrina-scroll,
+.fm-inset-card .fm-upload-grid,
+.fm-inset-card .fm-badge-chips,
+.fm-inset-card .fm-product-preview:not(.fm-product-preview--list),
+.fm-inset-card .fm-list-search-wrap {
+  padding-left: var(--fm-space-card);
+  padding-right: var(--fm-space-card);
+}
+
+.fm-inset-card .fm-stats-row:first-child,
+.fm-inset-card .fm-segment-wrap:first-child,
+.fm-inset-card .fm-list-search-wrap {
+  padding-top: var(--fm-space-card);
+}
+
+.fm-inset-card .fm-stats-row:last-child,
+.fm-inset-card .fm-vitrina-scroll:last-child {
+  padding-bottom: var(--fm-space-card);
+}
+
+/* Section inside inset: remove extra chrome */
+.fm-inset-card > [class*='Section'] {
+  background: transparent;
+  margin: 0;
+}
+
+.fm-inset-card > [class*='Section'] header {
+  display: none;
+}
+
+/* ── Dividers (Variant B — settings / long lists) ── */
+.fm-twa .fm-inset-card .fm-tap-group > [class*='Cell']:not(:last-child)::after,
+.fm-twa .fm-inset-card [class*='Section'] > [class*='Cell']:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  left: var(--fm-divider-inset-lg);
+  right: 0;
+  bottom: 0;
+  height: var(--fm-divider-weight);
+  background: var(--fm-separator);
+  pointer-events: none;
+}
+
+.fm-twa .fm-inset-card [class*='Cell'] {
+  position: relative;
+}
+
+/* ── Active / pressed states ── */
+.fm-tap:active,
+.fm-twa button:active:not(:disabled),
+.fm-twa [class*='Cell'][role='button']:active,
+.fm-twa [class*='Cell']:active {
+  opacity: 0.68;
+  transition: opacity 0.08s ease;
+}
+
+.fm-vitrina-card-tap:active,
+.fm-vitrina-copy:active,
+.fm-kyc-banner:active,
+.fm-badge-chip:active,
+.fm-hub-icon-btn:active,
+.fm-hub-avatar-btn:active {
+  opacity: 0.68;
+}
+
+/* ── Native inputs (no borders) ── */
+.fm-twa input:not([type='checkbox']):not([type='radio']):not(.fm-search-field-input),
+.fm-twa textarea,
+.fm-twa [class*='Input'] input,
+.fm-twa [class*='Textarea'] textarea {
+  background: var(--tg-theme-bg-color) !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: var(--fm-radius-input) !important;
+  padding: 12px !important;
+  font-size: var(--fm-text-headline) !important;
+  color: var(--tg-theme-text-color) !important;
+  caret-color: var(--tg-theme-button-color, var(--tg-theme-link-color));
+}
+
+.fm-twa input::placeholder,
+.fm-twa textarea::placeholder {
+  color: var(--tg-theme-hint-color);
+  opacity: 1;
+}
+
+.fm-twa input:focus,
+.fm-twa textarea:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ── Stats tiles inside cards ── */
+.fm-twa .fm-stat,
+.fm-twa .fm-pult-stat {
+  background: var(--fm-tile-bg);
+  border-radius: var(--fm-radius-input);
+  padding: 12px;
+}
+
+.fm-twa .fm-stat--accent {
+  color: var(--tg-theme-link-color);
+}
+
+/* ── Vitrina / product chips on surface ── */
+.fm-twa .fm-vitrina-card,
+.fm-twa .fm-pult-product {
+  background: var(--fm-tile-bg);
+  border: none;
+  border-radius: var(--fm-radius-card);
+}
+
+.fm-twa .fm-vitrina-copy {
+  background: color-mix(in srgb, var(--tg-theme-button-color, #007aff) 12%, transparent);
+  color: var(--tg-theme-button-color, var(--tg-theme-link-color));
+  border-radius: var(--fm-radius-chip);
+}
+
+/* ── KYC banner ── */
+.fm-twa .fm-kyc-banner {
+  margin: 0;
+  border-radius: var(--fm-radius-card);
+}
+
+/* ── Hub header ── */
+.fm-twa .fm-hub-header {
+  padding: 8px var(--fm-space-page) 0;
+}
+
+.fm-twa .fm-hub-header-title {
+  font-size: var(--fm-text-headline);
+  font-weight: 600;
+}
+
+/* ── Skeleton loaders ── */
+.fm-skeleton {
+  display: block;
+  border-radius: 4px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--tg-theme-hint-color) 16%, transparent) 0%,
+    color-mix(in srgb, var(--tg-theme-hint-color) 28%, transparent) 50%,
+    color-mix(in srgb, var(--tg-theme-hint-color) 16%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: fm-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes fm-shimmer {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.fm-skeleton-row {
+  display: flex;
+  gap: 12px;
+  padding: 12px var(--fm-space-card);
+  align-items: center;
+}
+
+.fm-skeleton-stack {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Chips ── */
+.fm-twa .fm-badge-chip {
+  border: none;
+  background: var(--tg-theme-bg-color);
+  border-radius: var(--fm-radius-chip);
+  font-size: var(--fm-text-body);
+  font-weight: 500;
+}
+
+.fm-twa .fm-badge-chip--active {
+  background: var(--tg-theme-button-color, var(--tg-theme-link-color));
+  color: var(--tg-theme-button-text-color, #fff);
+}
+
+.fm-twa .fm-chip-grid button {
+  border-radius: var(--fm-radius-chip);
+  background: var(--tg-theme-bg-color);
+  border: none;
+}
+
+/* ── Bottom sheet native ── */
+.fm-twa .fm-sheet-panel {
+  background: var(--fm-section-bg);
+}
+
+/* ── Demo badge uses accent ── */
+.fm-twa .fm-demo-badge {
+  background: var(--tg-theme-button-color, var(--tg-theme-link-color));
+  color: var(--tg-theme-button-text-color, #fff);
+}
+
+/* ── Profile menu (grouped inset lists) ── */
+.fm-menu-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.fm-menu-row {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--fm-icon-md) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--fm-gap-row);
+  padding: var(--fm-space-card) 16px var(--fm-space-card) var(--fm-space-card-x);
+  font-family: inherit;
+  font-size: var(--fm-text-headline, 17px);
+  font-weight: 400;
+  color: var(--tg-theme-text-color);
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fm-menu-row:not(.fm-menu-row--last)::after {
+  content: '';
+  position: absolute;
+  left: var(--fm-divider-inset-md);
+  right: 0;
+  bottom: 0;
+  height: var(--fm-divider-weight);
+  background: var(--fm-separator);
+}
+
+.fm-menu-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--fm-icon-md);
+  height: var(--fm-icon-md);
+}
+
+.fm-menu-glyph {
+  width: var(--fm-icon-md);
+  height: var(--fm-icon-md);
+  border-radius: var(--fm-radius-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.fm-menu-label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fm-menu-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #ff3b30;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.fm-menu-value {
+  font-size: var(--fm-text-body, 15px);
+  color: var(--tg-theme-hint-color);
+  white-space: nowrap;
+}
+
+.fm-menu-trail {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  justify-self: end;
+}
+
+.fm-menu-chevron,
+.fm-ds-chevron,
+.fm-value-row-chevron,
+.fm-entity-row-chevron {
+  width: var(--fm-icon-sm);
+  height: var(--fm-icon-sm);
+  min-width: var(--fm-icon-sm);
+  opacity: var(--fm-chevron-opacity);
+  flex-shrink: 0;
+  display: block;
+  overflow: visible;
+}

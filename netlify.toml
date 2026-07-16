@@ -1,0 +1,28 @@
+[build]
+  command = "npm run build:mini-app"
+  publish = "public"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+  external_node_modules = ["@telegram-apps/init-data-node"]
+
+[[redirects]]
+  from = "/api"
+  to = "/.netlify/functions/organizer-admin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/telegram/webhook"
+  to = "/.netlify/functions/organizer-admin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/mini-app/*"
+  to = "/mini-app/:splat"
+  status = 200

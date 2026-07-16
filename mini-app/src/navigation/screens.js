@@ -1,0 +1,16 @@
+export const SCREENS = {
+  HUB: 'hub',
+  CATALOG: 'catalog',
+  PRODUCT: 'product',
+  PRODUCT_MEDIA: 'product-media',
+  DROPS: 'drops',
+  LAUNCH_DROP: 'launch-drop',
+  DROP: 'drop',
+  ORDERS: 'orders',
+  ORDER_DETAIL: 'order-detail',
+  WAITLIST: 'waitlist',
+  STOREFRONT_EDIT: 'storefront-edit',
+  STOREFRONT_LOGO: 'storefront-logo',
+  SOCIALS: 'socials',
+  STORE_QR: 'store-qr',
+};
