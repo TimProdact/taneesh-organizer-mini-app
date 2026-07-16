@@ -160,7 +160,7 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
         </div>
 
         {filtered.length ? (
-          <Section>
+          <Section header="Участники">
             {filtered.map((a) => (
               <EntityListRow
                 key={a.id}

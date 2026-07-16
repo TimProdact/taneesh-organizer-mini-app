@@ -36,7 +36,7 @@ export function DocumentsPage() {
     <SubpageLayout>
       <PageHeader title="Документы" subtitle="Юридические материалы" />
       <List className="fm-page-list">
-        <Section>
+        <Section header="Документы">
           {DOCS.map((doc) => (
             <Cell
               key={doc.id}

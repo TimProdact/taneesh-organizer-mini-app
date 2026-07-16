@@ -51,7 +51,7 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
     <SubpageLayout stickyCta={showCta}>
       <PageHeader title="Заказ" subtitle={date} />
       <List className="fm-page-list">
-        <ValueGroup>
+        <ValueGroup header="Заказ">
           <ValueRow label="Статус" value={orderStatusLabel(order.status)} muted />
           <ValueRow label="Чек" value={order.receipt} />
         </ValueGroup>

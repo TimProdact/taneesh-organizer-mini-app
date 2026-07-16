@@ -92,7 +92,7 @@ export function EventSalesPage({ snapshot, eventId }) {
         </div>
 
         {filtered.length ? (
-          <Section>
+          <Section header="Продажи">
             {filtered.map((s) => (
               <EntityListRow
                 key={s.id}

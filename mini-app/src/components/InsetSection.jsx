@@ -1,10 +1,10 @@
-import { Children } from 'react';
+import { Section } from '@telegram-apps/telegram-ui';
 
+/** @deprecated Prefer ValueGroup / Section with `header` (СВОДКА style). */
 export function InsetSection({ title, children, className = '' }) {
   return (
-    <section className={`fm-inset-section ${className}`.trim()}>
-      {title && <h2 className="fm-inset-section-label">{title}</h2>}
-      <div className="fm-inset-card fm-tap-group">{children}</div>
-    </section>
+    <Section header={title || undefined} className={className || undefined}>
+      {children}
+    </Section>
   );
 }

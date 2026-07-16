@@ -37,7 +37,7 @@ export function OrdersPage({ snapshot, push }) {
         </div>
 
         {filtered.length > 0 ? (
-          <Section>
+          <Section header={filter === 'new' ? 'Новые' : 'Все заказы'}>
             {filtered.map((order) => (
               <EntityListRow
                 key={order.id}

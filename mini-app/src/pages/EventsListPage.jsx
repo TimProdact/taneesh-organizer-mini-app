@@ -81,7 +81,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
         </div>
 
         {filtered.length > 0 ? (
-          <Section>
+          <Section header={filter === 'archive' ? 'Архив' : 'Активные'}>
             {filtered.map((event) => (
               <Cell
                 key={event.id}

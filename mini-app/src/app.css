@@ -1641,6 +1641,11 @@ button.fm-value-row {
   width: 100%;
 }
 
+.fm-storefront-hero--in-section {
+  padding: 12px;
+  box-sizing: border-box;
+}
+
 .fm-storefront-hero-preview {
   width: 100%;
   aspect-ratio: 1;
@@ -1856,6 +1861,11 @@ button.fm-entity-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+
+.fm-photo-grid--in-section {
+  padding: 12px;
+  box-sizing: border-box;
 }
 
 .fm-photo-tile {

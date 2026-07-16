@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
-import { Button, List } from '@telegram-apps/telegram-ui';
+import { Button, List, Section } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
@@ -99,32 +99,33 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
         subtitle={photosSummary(photos.length)}
       />
       <List className="fm-page-list">
-        <p className="fm-media-hint">Хотя бы одно фото, максимум {MAX}</p>
-        <div className="fm-photo-grid">
-          {photos.map((src, idx) => (
-            <div key={`${idx}-${src.slice(0, 24)}`} className="fm-photo-tile">
-              <img src={src} alt="" />
+        <Section header="Галерея" footer={`Хотя бы одно фото, максимум ${MAX}`}>
+          <div className="fm-photo-grid fm-photo-grid--in-section">
+            {photos.map((src, idx) => (
+              <div key={`${idx}-${src.slice(0, 24)}`} className="fm-photo-tile">
+                <img src={src} alt="" />
+                <button
+                  type="button"
+                  className="fm-photo-remove"
+                  disabled={busy}
+                  onClick={() => removeAt(idx)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {photos.length < MAX ? (
               <button
                 type="button"
-                className="fm-photo-remove"
+                className="fm-photo-add"
                 disabled={busy}
-                onClick={() => removeAt(idx)}
+                onClick={() => fileRef.current?.click()}
               >
-                ✕
+                + Фото
               </button>
-            </div>
-          ))}
-          {photos.length < MAX ? (
-            <button
-              type="button"
-              className="fm-photo-add"
-              disabled={busy}
-              onClick={() => fileRef.current?.click()}
-            >
-              + Фото
-            </button>
-          ) : null}
-        </div>
+            ) : null}
+          </div>
+        </Section>
         <input
           ref={fileRef}
           type="file"

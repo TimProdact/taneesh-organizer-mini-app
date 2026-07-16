@@ -260,6 +260,7 @@ html[data-tgui-platform='android'] body {
 .fm-page-list > section > div > header {
   padding-left: 16px !important;
   padding-right: 16px !important;
+  /* Keep kit iOS Section header look (СВОДКА): caps + section_header_text_color */
 }
 
 /* Lock Cell metrics via our classes — kit hashes to tgui-*, [class*='Cell'] never matches */
