@@ -62,7 +62,9 @@ export function deliveryTypeLabel(type) {
 }
 
 /** upcoming | live | sold_out | paused | draft */
-export function phaseLabel(phase, paused) {
+export function phaseLabel(phase, paused, visible, status) {
+  if (visible === false) return 'Скрыто';
+  if (status === 'draft' || phase === 'draft') return 'Черновик';
   if (paused || phase === 'paused') return 'Пауза';
   const map = {
     live: 'Идёт',
@@ -72,6 +74,50 @@ export function phaseLabel(phase, paused) {
     draft: 'Черновик',
   };
   return map[phase] || 'Скоро';
+}
+
+export function eventEntryLabel(event) {
+  if (event?.isFree === false) {
+    const n = (event.tickets || []).length;
+    return n ? `Платно · ${n} тип(а)` : 'Платно';
+  }
+  if (event?.freeEntryMode === 'open') return 'Бесплатно · свободный вход';
+  return 'Бесплатно · модерация';
+}
+
+export function eventEntryChip(event) {
+  if (event?.isFree === false) return 'Продажи открыты';
+  if (event?.freeEntryMode === 'open') return 'Свободный вход';
+  return 'Нужно подтверждение';
+}
+
+export function eventMetricsRows(event) {
+  const m = event?.metrics || {};
+  if (event?.isFree === false) {
+    return [
+      { label: 'Выручка', value: formatPrice(m.revenue || 0) },
+      { label: 'Билеты', value: String(m.ticketsSold ?? 0) },
+      { label: 'Возвраты', value: formatPrice(m.refunds || 0) },
+      { label: 'Просмотры', value: String(m.views ?? 0) },
+      { label: 'Оформление', value: String(m.checkouts ?? 0) },
+      { label: 'Конверсия', value: `${m.conversion ?? 0}%` },
+    ];
+  }
+  if (event?.freeEntryMode === 'approval') {
+    return [
+      { label: 'Одобрено', value: String(m.approved ?? 0) },
+      { label: 'В ожидании', value: String(m.pending ?? 0) },
+      { label: 'Отклонено', value: String(m.declined ?? 0) },
+      { label: 'Просмотры', value: String(m.views ?? 0) },
+      { label: 'Оформление', value: String(m.checkouts ?? 0) },
+      { label: 'Конверсия', value: `${m.conversion ?? 0}%` },
+    ];
+  }
+  return [
+    { label: 'Зарегистрировано', value: String(m.registered ?? 0) },
+    { label: 'Просмотры', value: String(m.views ?? 0) },
+    { label: 'Конверсия', value: `${m.conversion ?? 0}%` },
+  ];
 }
 
 export function eventStatusTone(phase, paused) {

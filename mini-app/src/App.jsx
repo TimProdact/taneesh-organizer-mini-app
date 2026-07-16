@@ -8,6 +8,8 @@ import { SCREENS } from './navigation/screens.js';
 import { HubPage } from './pages/HubPage.jsx';
 import { EventsListPage } from './pages/EventsListPage.jsx';
 import { EventPage } from './pages/EventPage.jsx';
+import { EventAttendeesPage } from './pages/EventAttendeesPage.jsx';
+import { EventSalesPage } from './pages/EventSalesPage.jsx';
 import { OrdersPage } from './pages/OrdersPage.jsx';
 import { OrderDetailPage } from './pages/OrderDetailPage.jsx';
 import { AudiencePage } from './pages/AudiencePage.jsx';
@@ -104,6 +106,23 @@ export default function App() {
           <EventPage
             snapshot={snapshot}
             onSnapshotChange={setSnapshot}
+            eventId={params.eventId}
+            push={push}
+            pop={pop}
+          />
+        );
+      case SCREENS.EVENT_ATTENDEES:
+        return (
+          <EventAttendeesPage
+            snapshot={snapshot}
+            onSnapshotChange={setSnapshot}
+            eventId={params.eventId}
+          />
+        );
+      case SCREENS.EVENT_SALES:
+        return (
+          <EventSalesPage
+            snapshot={snapshot}
             eventId={params.eventId}
           />
         );

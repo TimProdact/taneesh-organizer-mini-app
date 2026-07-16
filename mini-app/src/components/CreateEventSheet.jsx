@@ -57,9 +57,10 @@ function ticketsValid(list) {
   });
 }
 
-export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) {
+export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChange, onClose }) {
   const fileRef = useRef(null);
   const carouselRef = useRef(null);
+  const isEdit = Boolean(event?.id);
   const verified = Boolean(
     snapshot?.profile?.kycStatus === 'approved'
       || snapshot?.profile?.verified
@@ -86,6 +87,44 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
 
   useEffect(() => {
     if (!open) return;
+    if (isEdit && event) {
+      setStep(1);
+      setPicker(null);
+      setBusy(false);
+      setLang('ru');
+      setPhotos([...(event.photos || [])].slice(0, 6));
+      setPhotoIndex(0);
+      setTitle({
+        ru: event.i18n?.title?.ru || event.name || '',
+        uz: event.i18n?.title?.uz || '',
+        en: event.i18n?.title?.en || '',
+      });
+      setDescription({
+        ru: event.i18n?.description?.ru || '',
+        uz: event.i18n?.description?.uz || '',
+        en: event.i18n?.description?.en || '',
+      });
+      setStartsAt(event.startsAt || defaultStartEnd().start);
+      setEndsAt(event.endsAt || defaultStartEnd().end);
+      setLocationName(event.location?.name || '');
+      setLocationAddress(event.location?.address || '');
+      setInterests([...(event.interests || [])]);
+      setInterestQuery('');
+      setIsFree(event.isFree !== false);
+      setFreeEntryMode(event.freeEntryMode === 'open' ? 'open' : 'approval');
+      setTickets(
+        event.isFree === false && (event.tickets || []).length
+          ? event.tickets.map((t) => ({
+              id: t.id || uid('t'),
+              name: t.name || '',
+              price: t.price || 0,
+              originalPrice: t.originalPrice || 0,
+              capacity: t.capacity || 0,
+            }))
+          : [],
+      );
+      return;
+    }
     const { start, end } = defaultStartEnd();
     setStep(1);
     setPicker(null);
@@ -104,7 +143,7 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
     setIsFree(true);
     setFreeEntryMode('approval');
     setTickets([]);
-  }, [open]);
+  }, [open, isEdit, event]);
 
   const canNext = useMemo(() => {
     if (step === 1) return photos.length >= 1;
@@ -255,7 +294,8 @@ export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) 
             };
           });
 
-      const nextSnap = await runActionSafe('create_event', {
+      const nextSnap = await runActionSafe(isEdit ? 'update_event' : 'create_event', {
+        eventId: isEdit ? event.id : undefined,
         name: title.ru.trim(),
         i18n: { title, description },
         photos,
