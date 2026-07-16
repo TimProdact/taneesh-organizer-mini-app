@@ -8,6 +8,7 @@
   --fm-content-gutter: 16px; /* edge → content (title, cards, buttons) */
   --fm-space-page: var(--fm-content-gutter);
   --fm-space-section: 16px; /* gap between Banner / Section / CTA */
+  --fm-space-after-filters: 24px; /* filters → list content */
   --fm-space-card: 12px;
   --fm-space-card-x: 16px;
   --fm-space-card-bottom: 14px;
@@ -71,7 +72,7 @@
   --fm-text-page-title: 18px;
   --fm-page-header-pt: 20px;
   --fm-page-header-px: 0px;
-  --fm-page-header-pb: 12px;
+  --fm-page-header-pb: 16px; /* title → filters / first content */
   --fm-text-body: 15px;
   --fm-text-caption: 12px;
 }
@@ -203,8 +204,9 @@ html[data-tgui-platform='android'] body {
 /* ── Inset-grouped lists (Telegram Settings) ── */
 .fm-hub-list,
 .fm-page-list {
-  /* Horizontal = parent gutter only (--fm-content-gutter) */
-  padding: var(--fm-space-section) 0 calc(12px + env(safe-area-inset-bottom)) !important;
+  /* Horizontal = parent gutter only (--fm-content-gutter).
+     Top pad = 0: header pb owns title → first content (16px). */
+  padding: 0 0 calc(12px + env(safe-area-inset-bottom)) !important;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -213,6 +215,7 @@ html[data-tgui-platform='android'] body {
 
 /* Hub list has no SubpageLayout — same edge gutter as pages */
 .fm-hub > .fm-hub-list {
+  padding-top: var(--fm-space-section) !important;
   padding-left: var(--fm-content-gutter) !important;
   padding-right: var(--fm-content-gutter) !important;
 }

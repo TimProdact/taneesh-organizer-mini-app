@@ -75,11 +75,12 @@ html, body, #root {
   padding: 12px var(--fm-space-card, 12px) 8px;
 }
 
+/* Page filters: flush to content grid; 24px to the list below */
 .fm-page-list > .fm-segment-wrap,
 .fm-hub-list > .fm-segment-wrap,
 .fm-page-list .fm-segment-wrap--media {
-  padding-left: 0;
-  padding-right: 0;
+  padding: 0;
+  margin-bottom: calc(var(--fm-space-after-filters, 24px) - var(--fm-space-section, 16px)) !important;
 }
 
 .fm-inset-card [class*='List'] {
@@ -2059,7 +2060,8 @@ button.fm-value-row {
 }
 
 .fm-segment-wrap--media {
-  margin-bottom: 16px;
+  /* spacing owned by .fm-page-list > .fm-segment-wrap */
+  margin-bottom: 0;
 }
 
 .fm-media-mode {
