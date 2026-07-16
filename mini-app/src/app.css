@@ -1630,12 +1630,29 @@ button.fm-value-row {
 }
 
 .fm-event-thumb {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 55px;
+  aspect-ratio: 4 / 5;
   border-radius: 10px;
   object-fit: cover;
   display: block;
+  flex-shrink: 0;
   background: var(--fm-surface-bg, var(--tg-theme-secondary-bg-color));
+}
+
+.fm-event-thumb--empty,
+.fm-entity-glyph.fm-event-thumb--empty {
+  width: 44px;
+  height: 55px;
+  aspect-ratio: 4 / 5;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  background: var(--fm-surface-bg, var(--tg-theme-secondary-bg-color));
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .fm-entity-glyph {
@@ -2147,8 +2164,12 @@ button.fm-entity-row {
   flex: 0 0 100%;
   width: 100%;
   scroll-snap-align: start;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 5;
+  max-height: min(420px, 58vh);
+  margin-inline: auto;
   background: color-mix(in srgb, var(--tg-theme-hint-color) 12%, transparent);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 .fm-review-slide img {
@@ -2178,7 +2199,8 @@ button.fm-entity-row {
 
 .fm-review-cover {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 5;
+  max-height: min(420px, 58vh);
   object-fit: cover;
   border-radius: 14px;
   background: color-mix(in srgb, var(--tg-theme-hint-color) 12%, transparent);
@@ -3632,11 +3654,13 @@ button.fm-entity-row {
   overflow: hidden;
   margin-bottom: 4px;
   background: color-mix(in srgb, var(--tg-theme-hint-color) 12%, transparent);
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 4 / 5;
+  max-height: min(420px, 58vh);
 }
 
 .fm-event-hero--empty {
-  aspect-ratio: 2.4;
+  aspect-ratio: 4 / 5;
+  max-height: min(420px, 58vh);
   display: flex;
   align-items: flex-end;
   padding: 12px;

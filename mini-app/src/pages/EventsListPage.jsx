@@ -90,7 +90,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
                   event.photos?.[0] ? (
                     <img src={event.photos[0]} alt="" className="fm-event-thumb" />
                   ) : (
-                    <span className="fm-entity-glyph" aria-hidden>📅</span>
+                    <span className="fm-entity-glyph fm-event-thumb--empty" aria-hidden>📅</span>
                   )
                 }
                 subtitle={eventSubtitle(event)}
