@@ -1,6 +1,5 @@
 import { Button } from '@telegram-apps/telegram-ui';
 import { Icon20Copy } from '@telegram-apps/telegram-ui/dist/icons/20/copy';
-import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { copyText, haptic } from '../api.js';
 import { profileOf, publicPageHost, publicPageUrl } from '../utils.js';
 
@@ -43,32 +42,30 @@ export function QrPage({ snapshot }) {
 
   return (
     <main className="fm-twa fm-qr-page">
-      <div className="fm-qr-stage">
-        <div className="fm-qr-card">
-          <div
-            className={`fm-qr-avatar${avatarUrl ? '' : ' fm-qr-avatar--emoji'}`}
-            aria-hidden
-          >
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <span>{logoEmoji}</span>}
+      <div className="fm-qr-card">
+        <div className="fm-qr-brand">
+          <div className="fm-qr-avatar" aria-hidden>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" />
+            ) : (
+              <span>{logoEmoji}</span>
+            )}
           </div>
           <h1 className="fm-qr-name">{displayName}</h1>
           <p className="fm-qr-handle">{publicPageHost()}</p>
-          <div className="fm-qr-frame">
-            <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
-          </div>
         </div>
-      </div>
-
-      <StickyPageCta className="fm-qr-sticky">
+        <div className="fm-qr-frame">
+          <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
+        </div>
         <div className="fm-qr-actions">
-          <Button mode="outline" size="l" stretched before={<Icon20Copy />} onClick={handleCopy}>
+          <Button mode="outline" size="m" stretched before={<Icon20Copy />} onClick={handleCopy}>
             Копировать
           </Button>
-          <Button mode="filled" size="l" stretched before={<ShareIcon />} onClick={handleShare}>
+          <Button mode="filled" size="m" stretched before={<ShareIcon />} onClick={handleShare}>
             Поделиться
           </Button>
         </div>
-      </StickyPageCta>
+      </div>
     </main>
   );
 }
