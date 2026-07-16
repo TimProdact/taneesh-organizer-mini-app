@@ -9,7 +9,6 @@ import { FieldSheet } from '../components/FieldSheet.jsx';
 import { DateTimePickerSheet, formatEventDateTime } from '../components/DateTimePickerSheet.jsx';
 import { CreateEventSheet } from '../components/CreateEventSheet.jsx';
 import {
-  eventEntryChip,
   eventEntryLabel,
   eventMetricsRows,
   phaseLabel,
@@ -47,7 +46,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
   };
 
   const status = phaseLabel(event.phase, event.paused, event.visible, event.status);
-  const cover = event.photos?.[0];
+  const photoCount = (event.photos || []).length;
   const description = event.i18n?.description?.ru || '';
   const metrics = eventMetricsRows(event);
   const publicUrl = `${publicPageUrl()}?event=${event.id}`;
@@ -106,17 +105,14 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
       />
 
       <List className="fm-page-list">
-        {cover ? (
-          <div className="fm-event-hero">
-            <img src={cover} alt="" className="fm-event-hero-img" />
-            <span className="fm-event-hero-badge">{status}</span>
-            <span className="fm-event-hero-chip">{eventEntryChip(event)}</span>
-          </div>
-        ) : (
-          <div className="fm-event-hero fm-event-hero--empty">
-            <span className="fm-event-hero-badge">{status}</span>
-          </div>
-        )}
+        <ValueGroup>
+          <ValueRow
+            label="Фото"
+            value={photoCount ? `${photoCount} из 6` : 'Не указано'}
+            muted={!photoCount}
+            onClick={() => push(SCREENS.EVENT_PHOTOS, { eventId: event.id })}
+          />
+        </ValueGroup>
 
         <ValueGroup header="О событии">
           <ValueRow

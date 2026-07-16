@@ -2,6 +2,7 @@ export const SCREENS = {
   HUB: 'hub',
   EVENTS: 'events',
   EVENT: 'event',
+  EVENT_PHOTOS: 'event-photos',
   EVENT_ATTENDEES: 'event-attendees',
   EVENT_SALES: 'event-sales',
   SALES: 'sales',
