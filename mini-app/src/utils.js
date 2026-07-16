@@ -66,14 +66,15 @@ export function deliveryTypeLabel(type) {
   return type || '—';
 }
 
+/** Статусы мероприятий (под капотом те же phase-ключи, что у дропов). */
 export function phaseLabel(phase, paused) {
   if (paused) return 'Пауза';
   const map = {
-    active: 'Идёт продажа',
-    pre_drop: 'До старта',
+    active: 'Идёт',
+    pre_drop: 'Скоро',
     sold_out: 'Распродано',
   };
-  return map[phase] || 'До старта';
+  return map[phase] || 'Скоро';
 }
 
 export function resolveDropState(snapshot = {}) {
@@ -92,14 +93,14 @@ export function dropStatusTone(phase, paused) {
   return 'pre-drop';
 }
 
-function countDropsByStatus(drops = []) {
+function countEventsByStatus(events = []) {
   const counts = { active: 0, pre_drop: 0, sold_out: 0, paused: 0 };
-  for (const drop of drops) {
-    if (drop.paused) {
+  for (const event of events) {
+    if (event.paused) {
       counts.paused += 1;
-    } else if (drop.phase === 'active') {
+    } else if (event.phase === 'active') {
       counts.active += 1;
-    } else if (drop.phase === 'sold_out') {
+    } else if (event.phase === 'sold_out') {
       counts.sold_out += 1;
     } else {
       counts.pre_drop += 1;
@@ -108,24 +109,24 @@ function countDropsByStatus(drops = []) {
   return counts;
 }
 
-function buildDropStatusPills(drops = []) {
-  if (!drops.length) {
-    return [{ id: 'empty', label: 'Нет дропов', tone: 'pre-drop' }];
+function buildEventStatusPills(events = []) {
+  if (!events.length) {
+    return [{ id: 'empty', label: 'Нет мероприятий', tone: 'pre-drop' }];
   }
 
-  const counts = countDropsByStatus(drops);
+  const counts = countEventsByStatus(events);
   return [
-    counts.active > 0 ? { id: 'active', label: `${counts.active} активен`, tone: 'active' } : null,
-    counts.pre_drop > 0 ? { id: 'pre_drop', label: `${counts.pre_drop} предроп`, tone: 'pre-drop' } : null,
-    counts.sold_out > 0 ? { id: 'sold_out', label: `${counts.sold_out} распродан`, tone: 'sold-out' } : null,
+    counts.active > 0 ? { id: 'active', label: `${counts.active} идёт`, tone: 'active' } : null,
+    counts.pre_drop > 0 ? { id: 'pre_drop', label: `${counts.pre_drop} скоро`, tone: 'pre-drop' } : null,
+    counts.sold_out > 0 ? { id: 'sold_out', label: `${counts.sold_out} распродано`, tone: 'sold-out' } : null,
     counts.paused > 0 ? { id: 'paused', label: `${counts.paused} пауза`, tone: 'paused' } : null,
   ].filter(Boolean);
 }
 
-/** Hub hero: pill-теги по статусам дропов */
+/** Hub hero: pill-теги по статусам мероприятий */
 export function buildHubHeroCombos(snapshot = {}) {
-  const drops = snapshot.drops || [];
-  return { pills: buildDropStatusPills(drops) };
+  const events = snapshot.drops || snapshot.events || [];
+  return { pills: buildEventStatusPills(events) };
 }
 
 export function formatDropDate(iso) {

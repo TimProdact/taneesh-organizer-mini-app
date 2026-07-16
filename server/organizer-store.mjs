@@ -123,7 +123,7 @@ export function getSnapshot() {
   return {
     storefront: {
       displayName: 'Taneesh Organizer',
-      bio: 'Кабинет организатора в Telegram',
+      bio: '',
       avatarUrl: '',
       logoEmoji: '🎟️',
       socials: {},
