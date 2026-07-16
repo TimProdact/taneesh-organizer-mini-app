@@ -1078,7 +1078,7 @@ html, body, #root {
 }
 
 .fm-hub-cta {
-  padding: 4px 0 8px;
+  padding: 0;
 }
 
 .fm-hub-cta-btn {
@@ -1108,7 +1108,6 @@ html, body, #root {
 }
 
 .fm-hub-kyc-banner {
-  margin-bottom: 8px;
   cursor: pointer;
 }
 

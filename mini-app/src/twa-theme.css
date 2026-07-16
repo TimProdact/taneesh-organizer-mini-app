@@ -5,9 +5,9 @@
 
 :root {
   /* ── Spacing — one content grid for all pages ── */
-  --fm-content-gutter: 16px;
+  --fm-content-gutter: 16px; /* edge → content (title, cards, buttons) */
   --fm-space-page: var(--fm-content-gutter);
-  --fm-space-section: 22px;
+  --fm-space-section: 16px; /* gap between Banner / Section / CTA */
   --fm-space-card: 12px;
   --fm-space-card-x: 16px;
   --fm-space-card-bottom: 14px;
@@ -16,7 +16,7 @@
   --fm-gap-micro: 6px;
   --fm-gap-stack: 2px;
   --fm-list-pad-x: 0px;
-  --fm-list-pad-y: 8px;
+  --fm-list-pad-y: 0px;
 
   /* ── Icons (Settings menu tiles) ── */
   --fm-icon-sm: 20px;
@@ -204,19 +204,37 @@ html[data-tgui-platform='android'] body {
 .fm-hub-list,
 .fm-page-list {
   /* Horizontal = parent gutter only (--fm-content-gutter) */
-  padding: var(--fm-list-pad-y) 0 calc(12px + env(safe-area-inset-bottom)) !important;
+  padding: var(--fm-space-section) 0 calc(12px + env(safe-area-inset-bottom)) !important;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-section);
 }
 
-/* Hub list has no SubpageLayout — apply the same content gutter */
+/* Hub list has no SubpageLayout — same edge gutter as pages */
 .fm-hub > .fm-hub-list {
   padding-left: var(--fm-content-gutter) !important;
   padding-right: var(--fm-content-gutter) !important;
 }
 
+/* Prefer gap; kill kit’s uneven per-child margins */
 .fm-hub-list > :not(:last-child),
 .fm-page-list > :not(:last-child) {
-  margin-bottom: var(--fm-space-section) !important;
+  margin-bottom: 0 !important;
+}
+
+/* Banner = same width/radius as Section */
+.fm-hub-list > [class*='Banner'],
+.fm-page-list > [class*='Banner'],
+.fm-hub-kyc-banner {
+  margin: 0 !important;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--fm-radius-card) !important;
+  padding: 16px !important;
+  background: var(--fm-surface-bg) !important;
+  box-shadow: none !important;
+  cursor: pointer;
 }
 
 /* Force iOS inset Section chrome on all platforms */
@@ -231,6 +249,13 @@ html[data-tgui-platform='android'] body {
   background: var(--fm-surface-bg) !important;
   border-radius: var(--fm-radius-card);
   overflow: hidden;
+}
+
+/* Section headers sit in the content grid (no extra side pad beyond Cell) */
+.fm-hub-list > section > div > header,
+.fm-page-list > section > div > header {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
 }
 
 /* Lock Cell metrics to iOS Settings (kit uses 24px gap on `base` / Desktop) */
@@ -260,6 +285,16 @@ html[data-tgui-platform='android'] body {
   height: var(--fm-icon-md);
   border-radius: var(--fm-radius-icon);
   font-size: var(--fm-icon-glyph);
+}
+
+/* CTA / Placeholder share the same content width */
+.fm-hub-list > .fm-hub-cta,
+.fm-page-list > .fm-page-cta,
+.fm-hub-list > [class*='Placeholder'],
+.fm-page-list > [class*='Placeholder'] {
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* ── In-set card groups (Variant A) ── */
