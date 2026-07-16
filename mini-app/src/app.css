@@ -2950,25 +2950,20 @@ button.fm-value-row {
   border-radius: 12px;
   background: color-mix(in srgb, var(--tg-theme-section-bg-color, #2c2c2e) 100%, transparent);
   overflow: hidden;
+  margin-top: 8px;
+  padding: 0;
 }
 
-.fm-dt-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  margin: 0;
-}
-
-.fm-dt-row-label {
-  font-size: 1rem;
-  color: var(--tg-theme-text-color);
+.fm-dt-cell {
+  min-height: 48px;
 }
 
 .fm-dt-time-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 72px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: 0;
   border-radius: 999px;
   background: color-mix(in srgb, var(--tg-theme-hint-color) 18%, transparent);
@@ -2977,12 +2972,131 @@ button.fm-value-row {
   font-weight: 600;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  line-height: 1.2;
 }
 
-.fm-dt-time-pill::-webkit-calendar-picker-indicator {
-  opacity: 0.35;
+.fm-dt-time-pill--on {
+  background: color-mix(in srgb, var(--tg-theme-button-color, #007aff) 22%, transparent);
+  color: var(--tg-theme-button-color, #007aff);
+}
+
+.fm-dt-cal-wrap {
+  position: relative;
+}
+
+.fm-dt-wheel-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.fm-dt-wheel-scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: color-mix(in srgb, var(--tg-theme-bg-color, #000) 28%, transparent);
+  backdrop-filter: blur(1.5px);
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.fm-dt-wheel-card {
+  position: relative;
+  z-index: 1;
+  width: min(280px, 86%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tg-theme-secondary-bg-color, #2c2c2e) 92%, #fff);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.35),
+    0 0 0 0.5px color-mix(in srgb, var(--tg-theme-hint-color) 25%, transparent);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.fm-wheel {
+  --fm-wheel-h: calc(var(--fm-wheel-item-h, 36px) * var(--fm-wheel-visible, 5));
+  position: relative;
+  height: var(--fm-wheel-h);
+  padding: 0 8px;
+}
+
+.fm-wheel-highlight {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  top: 50%;
+  height: var(--fm-wheel-item-h, 36px);
+  margin-top: calc(var(--fm-wheel-item-h, 36px) / -2);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 18%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.fm-wheel-cols {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  gap: 4px;
+}
+
+.fm-wheel-col {
+  height: 100%;
+  min-width: 0;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    #000 18%,
+    #000 82%,
+    transparent 100%
+  );
+}
+
+.fm-wheel-scroll {
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.fm-wheel-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.fm-wheel-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  scroll-snap-align: center;
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+  color: color-mix(in srgb, var(--tg-theme-text-color) 45%, transparent);
+  font-weight: 500;
+}
+
+.fm-wheel-item--on {
+  color: var(--tg-theme-text-color);
+  font-weight: 650;
 }
 
 .fm-dt-footer {
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+}
+
+.fm-dt-nav-btn {
+  display: grid;
+  place-items: center;
+}
+
+.fm-dt-icon-btn {
+  display: grid;
+  place-items: center;
 }

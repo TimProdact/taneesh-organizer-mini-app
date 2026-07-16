@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
+import { Button, Cell, List } from '@telegram-apps/telegram-ui';
+import { Icon24Close } from '@telegram-apps/telegram-ui/dist/icons/24/close';
+import { Icon24ChevronLeft } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_left';
+import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
+import { TimeWheelPicker } from './TimeWheelPicker.jsx';
+import { haptic } from '../api.js';
 
 const WEEKDAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 const MONTHS = [
@@ -38,7 +43,6 @@ function isToday(parts) {
 
 function buildMonthCells(y, m) {
   const first = new Date(y, m, 1);
-  // Monday-first
   let start = (first.getDay() + 6) % 7;
   const daysInMonth = new Date(y, m + 1, 0).getDate();
   const cells = [];
@@ -57,8 +61,8 @@ function ctaLabel(parts) {
 }
 
 /**
- * Модалка выбора даты+времени (как в Telegram schedule).
- * Без строки «Повторять».
+ * Модалка даты+времени в стиле Telegram schedule.
+ * Тап по «Время» открывает барабан HH:mm поверх календаря.
  */
 export function DateTimePickerSheet({
   open,
@@ -71,6 +75,7 @@ export function DateTimePickerSheet({
   const [viewY, setViewY] = useState(() => toLocalParts(valueIso).y);
   const [viewM, setViewM] = useState(() => toLocalParts(valueIso).m);
   const [selected, setSelected] = useState(() => toLocalParts(valueIso));
+  const [timeOpen, setTimeOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -78,6 +83,7 @@ export function DateTimePickerSheet({
     setSelected(parts);
     setViewY(parts.y);
     setViewM(parts.m);
+    setTimeOpen(false);
   }, [open, valueIso]);
 
   useEffect(() => {
@@ -97,10 +103,6 @@ export function DateTimePickerSheet({
 
   if (!open) return null;
 
-  const handleSave = () => {
-    onSave?.(partsToIso(selected));
-  };
-
   return (
     <div className="fm-sheet-root" role="presentation" onClick={onClose}>
       <div className="fm-sheet-backdrop" />
@@ -112,66 +114,103 @@ export function DateTimePickerSheet({
       >
         <header className="fm-dt-header">
           <button type="button" className="fm-dt-icon-btn" aria-label="Закрыть" onClick={onClose}>
-            ✕
+            <Icon24Close />
           </button>
           <div className="fm-dt-title">{title}</div>
           <span className="fm-dt-icon-btn fm-dt-icon-btn--ghost" aria-hidden />
         </header>
 
         <div className="fm-dt-body">
-          <div className="fm-dt-month-bar">
-            <span className="fm-dt-month-label">
-              {MONTHS[viewM]} {viewY}
-            </span>
-            <div className="fm-dt-month-nav">
-              <button type="button" className="fm-dt-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Предыдущий месяц">
-                ‹
-              </button>
-              <button type="button" className="fm-dt-nav-btn" onClick={() => shiftMonth(1)} aria-label="Следующий месяц">
-                ›
-              </button>
-            </div>
-          </div>
-
-          <div className="fm-dt-weekdays">
-            {WEEKDAYS.map((w) => (
-              <span key={w} className="fm-dt-weekday">{w}</span>
-            ))}
-          </div>
-
-          <div className="fm-dt-grid">
-            {cells.map((day, idx) => {
-              if (!day) return <span key={`e-${idx}`} className="fm-dt-day fm-dt-day--empty" />;
-              const parts = { y: viewY, m: viewM, day };
-              const selectedDay = sameDay(selected, parts);
-              return (
-                <button
-                  key={`${viewY}-${viewM}-${day}`}
-                  type="button"
-                  className={`fm-dt-day${selectedDay ? ' fm-dt-day--selected' : ''}`}
-                  onClick={() => setSelected((s) => ({ ...s, y: viewY, m: viewM, day }))}
-                >
-                  {day}
+          <div className="fm-dt-cal-wrap">
+            <div className="fm-dt-month-bar">
+              <span className="fm-dt-month-label">
+                {MONTHS[viewM]} {viewY}
+              </span>
+              <div className="fm-dt-month-nav">
+                <button type="button" className="fm-dt-nav-btn" onClick={() => shiftMonth(-1)} aria-label="Предыдущий месяц">
+                  <Icon24ChevronLeft />
                 </button>
-              );
-            })}
+                <button type="button" className="fm-dt-nav-btn" onClick={() => shiftMonth(1)} aria-label="Следующий месяц">
+                  <Icon24ChevronRight />
+                </button>
+              </div>
+            </div>
+
+            <div className="fm-dt-weekdays">
+              {WEEKDAYS.map((w) => (
+                <span key={w} className="fm-dt-weekday">{w}</span>
+              ))}
+            </div>
+
+            <div className="fm-dt-grid">
+              {cells.map((day, idx) => {
+                if (!day) return <span key={`e-${idx}`} className="fm-dt-day fm-dt-day--empty" />;
+                const parts = { y: viewY, m: viewM, day };
+                const selectedDay = sameDay(selected, parts);
+                return (
+                  <button
+                    key={`${viewY}-${viewM}-${day}`}
+                    type="button"
+                    className={`fm-dt-day${selectedDay ? ' fm-dt-day--selected' : ''}`}
+                    onClick={() => {
+                      setTimeOpen(false);
+                      setSelected((s) => ({ ...s, y: viewY, m: viewM, day }));
+                      haptic('selection');
+                    }}
+                  >
+                    {day}
+                  </button>
+                );
+              })}
+            </div>
+
+            {timeOpen ? (
+              <div className="fm-dt-wheel-layer">
+                <button
+                  type="button"
+                  className="fm-dt-wheel-scrim"
+                  aria-label="Закрыть выбор времени"
+                  onClick={() => setTimeOpen(false)}
+                />
+                <div className="fm-dt-wheel-card">
+                  <TimeWheelPicker
+                    time={selected.time}
+                    onChange={(time) => {
+                      setSelected((s) => ({ ...s, time }));
+                      haptic('selection');
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          <div className="fm-dt-rows">
-            <label className="fm-dt-row">
-              <span className="fm-dt-row-label">Время</span>
-              <input
-                type="time"
-                className="fm-dt-time-pill"
-                value={selected.time}
-                onChange={(e) => setSelected((s) => ({ ...s, time: e.target.value }))}
-              />
-            </label>
-          </div>
+          <List className="fm-dt-rows">
+            <Cell
+              className="fm-dt-cell"
+              after={(
+                <span className={`fm-dt-time-pill${timeOpen ? ' fm-dt-time-pill--on' : ''}`}>
+                  {selected.time}
+                </span>
+              )}
+              onClick={() => {
+                haptic('selection');
+                setTimeOpen((v) => !v);
+              }}
+            >
+              Время
+            </Cell>
+          </List>
         </div>
 
         <div className="fm-dt-footer">
-          <Button mode="filled" size="l" stretched disabled={busy} onClick={handleSave}>
+          <Button
+            mode="filled"
+            size="l"
+            stretched
+            disabled={busy}
+            onClick={() => onSave?.(partsToIso(selected))}
+          >
             {ctaLabel(selected)}
           </Button>
         </div>
