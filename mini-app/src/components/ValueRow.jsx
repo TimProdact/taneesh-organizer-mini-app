@@ -9,8 +9,8 @@ export function previewLine(value, empty = '—') {
 }
 
 /**
- * Settings row — label left (full word), value + chevron right on ONE line.
- * Long value → ellipsis; full text opens via onClick / sheet.
+ * Settings row — one line: [label] …… [value…] [>]
+ * Do not put value in Cell `hint` (breaks layout with hashed kit classes).
  */
 export function ValueRow({
   label,
@@ -22,25 +22,19 @@ export function ValueRow({
 }) {
   void last;
   const preview = previewLine(value);
-  const valueEl = (
-    <span className={`fm-value-text${muted ? ' fm-value-text--muted' : ''}`}>
-      {preview}
-    </span>
-  );
 
   return (
     <Cell
       className="fm-value-row"
       before={leading || undefined}
-      after={
-        onClick ? (
-          <Navigation className="fm-value-nav">
-            {valueEl}
-          </Navigation>
-        ) : (
-          valueEl
-        )
-      }
+      after={(
+        <span className="fm-value-after">
+          <span className={`fm-value-text${muted ? ' fm-value-text--muted' : ''}`}>
+            {preview}
+          </span>
+          {onClick ? <Navigation /> : null}
+        </span>
+      )}
       onClick={
         onClick
           ? () => {

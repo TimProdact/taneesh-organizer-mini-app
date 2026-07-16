@@ -1495,58 +1495,62 @@ button.fm-value-row {
 }
 
 /*
- * ValueRow — one horizontal line:
- * [label] .............. [value…] [>]
- * Label never ellipsizes; only value truncates.
+ * ValueRow — kit hashes class names, so never use [class*='after'].
+ * Cell children: [before?] + middle + after. after = :last-child.
+ * Layout: [label] ………… [value…] [>]
  */
 .fm-value-row {
+  display: flex !important;
+  flex-direction: row !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
 }
 
-.fm-value-row [class*='middle'] {
-  flex: 0 1 auto !important;
+/* middle (label) — natural width, never ellipsis */
+.fm-value-row > :nth-last-child(2) {
+  flex: 0 0 auto !important;
   flex-grow: 0 !important;
-  max-width: 42%;
+  max-width: 46%;
   min-width: 0;
+  overflow: visible !important;
 }
 
-.fm-value-row [class*='head'],
-.fm-value-row [class*='title'] {
+.fm-value-row > :nth-last-child(2) * {
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap !important;
-  max-width: none !important;
 }
 
-.fm-value-row [class*='after'] {
+/* after wrapper — takes remaining width */
+.fm-value-row > :last-child {
   flex: 1 1 0% !important;
   min-width: 0 !important;
   max-width: none !important;
   justify-content: flex-end !important;
-  overflow: hidden;
+  overflow: hidden !important;
 }
 
-.fm-value-nav {
-  display: inline-flex !important;
+.fm-value-after {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
   min-width: 0;
   max-width: 100%;
   overflow: hidden;
 }
 
-.fm-value-nav [class*='text'],
 .fm-value-text {
-  display: block;
   min-width: 0;
-  flex: 1 1 auto;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
-  overflow-wrap: normal !important;
-  word-break: keep-all !important;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   text-align: right;
+  font-size: 0.9375rem;
+  line-height: 1.25;
   color: var(--tg-theme-hint-color, #8e8e93);
 }
 
@@ -1554,24 +1558,24 @@ button.fm-value-row {
   opacity: 0.9;
 }
 
-.fm-value-nav svg,
-.fm-value-nav [class*='icon'] {
+.fm-value-after > :last-child {
   flex-shrink: 0;
 }
 
-/* Entity rows: title + subtitle stay single-line */
-.fm-entity-row [class*='subtitle'],
-.fm-entity-row [class*='title'] {
+/* Entity list rows — single-line subtitle via our class only */
+.fm-entity-row {
+  flex-wrap: nowrap !important;
+}
+
+.fm-entity-row > :nth-last-child(2) {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.fm-entity-row > :nth-last-child(2) * {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-}
-
-.fm-page-list > [class*='Cell']:not(.fm-value-row):not(.fm-entity-row) [class*='subtitle'],
-.fm-hub-list > section [class*='Cell']:not(.fm-value-row) [class*='subtitle'] {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .fm-page-cta--separated {
