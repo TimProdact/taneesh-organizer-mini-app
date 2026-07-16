@@ -37,9 +37,11 @@ export default function App() {
     const init = await waitForInitData();
     if (!init) {
       const hint = hasTelegramContext()
-        ? 'Сессия Telegram не передана. Закройте Mini App и откройте снова через кнопку «Админка» в @pocketpals_bot.'
-        : 'Откройте через кнопку «Админка» в боте @pocketpals_bot (не из браузера).';
-      setError(`${hint}\n\nBotFather: /setdomain → timprodact.github.io`);
+        ? 'Сессия Telegram не передана. Закройте Mini App и откройте снова через кнопку «Админка» в @taneesh_org_bot.'
+        : 'Откройте через кнопку «Админка» в боте @taneesh_org_bot (не из браузера).';
+      setError(
+        `${hint}\n\nBotFather → /setdomain → taneesh-organizer-api.onrender.com`,
+      );
       setLoading(false);
       return;
     }

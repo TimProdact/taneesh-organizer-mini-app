@@ -22,7 +22,7 @@ export function SettingsPage() {
               }}
               subtitle="Витрина"
             >
-              timprodact.github.io/the4
+              taneesh-organizer-api.onrender.com
             </Cell>
             <Cell
               onClick={() => copyText(url)}

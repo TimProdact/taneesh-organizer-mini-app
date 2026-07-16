@@ -14,6 +14,9 @@ const IDS_FILE = join(DATA_DIR, 'organizer-telegram-ids.json');
 const BLOB_STORE = 'taneesh-organizer';
 const BLOB_ADMINS = 'organizer-telegram-ids';
 
+/** Survives for the life of the Node process (Render free has no persistent disk). */
+const memoryGranted = new Set();
+
 let blobsReady = false;
 
 export function initBlobs(event) {
@@ -85,15 +88,17 @@ async function saveBlobIds(ids) {
 export async function isOrganizer(telegramId) {
   const id = Number(telegramId);
   if (envIds().includes(id)) return true;
+  if (memoryGranted.has(id)) return true;
   const blobIds = await loadBlobIds();
   if (blobIds && blobIds.includes(id)) return true;
-  if (!blobsReady) return loadLocalIds().includes(id);
   return loadLocalIds().includes(id);
 }
 
 export async function grantOrganizer(telegramId) {
   const id = Number(telegramId);
   if (!Number.isFinite(id) || id <= 0) throw new Error('Bad telegram id');
+
+  memoryGranted.add(id);
 
   const blobIds = (await loadBlobIds()) || [];
   if (!blobIds.includes(id)) {
@@ -109,6 +114,7 @@ export async function grantOrganizer(telegramId) {
   } else {
     await saveBlobIds(blobIds);
   }
+  console.log('[grantOrganizer]', id);
   return true;
 }
 

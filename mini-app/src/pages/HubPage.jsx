@@ -99,7 +99,7 @@ export function HubPage({ snapshot, push }) {
       </div>
 
       <footer className="fm-hub-footer">
-        <span>@pocketpals_bot</span>
+        <span>@taneesh_org_bot</span>
       </footer>
     </main>
   );
