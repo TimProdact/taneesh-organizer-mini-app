@@ -57,14 +57,14 @@ export function QrPage({ snapshot }) {
         <div className="fm-qr-frame">
           <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
         </div>
-        <div className="fm-qr-actions">
-          <Button mode="outline" size="m" stretched before={<Icon20Copy />} onClick={handleCopy}>
-            Копировать
-          </Button>
-          <Button mode="filled" size="m" stretched before={<ShareIcon />} onClick={handleShare}>
-            Поделиться
-          </Button>
-        </div>
+      </div>
+      <div className="fm-qr-actions">
+        <Button mode="outline" size="m" stretched before={<Icon20Copy />} onClick={handleCopy}>
+          Копировать
+        </Button>
+        <Button mode="filled" size="m" stretched before={<ShareIcon />} onClick={handleShare}>
+          Поделиться
+        </Button>
       </div>
     </main>
   );
