@@ -478,6 +478,110 @@ html, body, #root {
   padding: 8px var(--fm-space-page) 0;
 }
 
+.fm-hub-kyc {
+  appearance: none;
+  border: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  background: color-mix(in srgb, #ff9500 14%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+  border-radius: var(--fm-radius-card, 14px);
+  padding: 14px 14px 14px 12px;
+  box-shadow: 0 0 0 var(--fm-divider-weight, 0.5px) color-mix(in srgb, #ff9500 28%, transparent);
+}
+
+.fm-hub-kyc--pending {
+  background: color-mix(in srgb, #ffcc00 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+  box-shadow: 0 0 0 var(--fm-divider-weight, 0.5px) color-mix(in srgb, #ffcc00 30%, transparent);
+}
+
+.fm-hub-kyc--rejected {
+  background: color-mix(in srgb, #ff3b30 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+  box-shadow: 0 0 0 var(--fm-divider-weight, 0.5px) color-mix(in srgb, #ff3b30 28%, transparent);
+}
+
+.fm-hub-kyc-glyph {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  background: color-mix(in srgb, #ff9500 22%, transparent);
+}
+
+.fm-hub-kyc--pending .fm-hub-kyc-glyph {
+  background: color-mix(in srgb, #ffcc00 22%, transparent);
+}
+
+.fm-hub-kyc--rejected .fm-hub-kyc-glyph {
+  background: color-mix(in srgb, #ff3b30 22%, transparent);
+}
+
+.fm-hub-kyc-copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fm-hub-kyc-title {
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--tg-theme-text-color);
+}
+
+.fm-hub-kyc-body {
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--tg-theme-hint-color);
+}
+
+.fm-hub-kyc-chevron {
+  flex-shrink: 0;
+  opacity: 0.45;
+  color: var(--tg-theme-hint-color);
+}
+
+.fm-kyc-card {
+  border-radius: 14px;
+  padding: 16px;
+  background: color-mix(in srgb, #ff9500 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+}
+
+.fm-kyc-card--pending {
+  background: color-mix(in srgb, #ffcc00 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+}
+
+.fm-kyc-card--rejected {
+  background: color-mix(in srgb, #ff3b30 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+}
+
+.fm-kyc-card--approved {
+  background: color-mix(in srgb, #34c759 12%, var(--fm-section-bg, var(--tg-theme-secondary-bg-color)));
+}
+
+.fm-kyc-card-title {
+  margin: 0 0 6px;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.fm-kyc-card-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--tg-theme-hint-color);
+}
+
 .fm-hub-summary-card {
   appearance: none;
   border: 0;

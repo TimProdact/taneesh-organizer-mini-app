@@ -145,8 +145,9 @@ function defaultStore() {
       bio: '',
       avatarUrl: '',
       logoEmoji: '🎟️',
-      /** Demo: allow paid events. Real API will mirror org verification. */
-      verified: true,
+      /** idle | pending | approved | rejected */
+      kycStatus: 'idle',
+      verified: false,
     },
     events,
     orders: [],
@@ -159,7 +160,7 @@ function defaultStore() {
       audienceCount: 0,
       controllersCount: 0,
       pendingApplications: 0,
-      verified: true,
+      verified: false,
     },
   };
 }
@@ -167,11 +168,17 @@ function defaultStore() {
 let store = defaultStore();
 
 function refreshMeta() {
+  const verified = store.profile?.kycStatus === 'approved' || store.profile?.verified === true;
+  store.profile = {
+    ...store.profile,
+    verified,
+  };
   store.meta = {
     ...store.meta,
     eventsCount: store.events.length,
     audienceCount: store.audience.length,
     controllersCount: store.controllers.length,
+    verified,
   };
 }
 
@@ -268,6 +275,29 @@ export async function runAction(adminAction, payload = {}) {
 
   if (adminAction === 'update_social_links') {
     store.socialLinks = payload.socialLinks || [];
+    return getSnapshot();
+  }
+
+  if (adminAction === 'submit_kyc') {
+    store.profile = {
+      ...store.profile,
+      kycStatus: 'pending',
+      verified: false,
+    };
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'set_kyc_status') {
+    const status = payload.status;
+    if (['idle', 'pending', 'approved', 'rejected'].includes(status)) {
+      store.profile = {
+        ...store.profile,
+        kycStatus: status,
+        verified: status === 'approved',
+      };
+      refreshMeta();
+    }
     return getSnapshot();
   }
 

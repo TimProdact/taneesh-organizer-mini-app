@@ -13,6 +13,8 @@ import { OrderDetailPage } from './pages/OrderDetailPage.jsx';
 import { AudiencePage } from './pages/AudiencePage.jsx';
 import { ControllersPage } from './pages/ControllersPage.jsx';
 import { FinancePage } from './pages/FinancePage.jsx';
+import { KycPage } from './pages/KycPage.jsx';
+import { DocumentsPage } from './pages/DocumentsPage.jsx';
 import { StorefrontEditPage } from './pages/StorefrontEditPage.jsx';
 import { StorefrontLogoPage } from './pages/StorefrontLogoPage.jsx';
 import { SocialsPage } from './pages/SocialsPage.jsx';
@@ -117,6 +119,10 @@ export default function App() {
         return <ControllersPage snapshot={snapshot} />;
       case SCREENS.FINANCE:
         return <FinancePage snapshot={snapshot} />;
+      case SCREENS.KYC:
+        return <KycPage snapshot={snapshot} onSnapshotChange={setSnapshot} />;
+      case SCREENS.DOCUMENTS:
+        return <DocumentsPage />;
       case SCREENS.PROFILE_EDIT:
         return (
           <StorefrontEditPage snapshot={snapshot} onSnapshotChange={setSnapshot} push={push} />

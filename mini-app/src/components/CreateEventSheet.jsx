@@ -38,7 +38,11 @@ function readPhotoAsDataUrl(file) {
 
 export function CreateEventSheet({ open, snapshot, onSnapshotChange, onClose }) {
   const fileRef = useRef(null);
-  const verified = Boolean(snapshot?.profile?.verified || snapshot?.meta?.verified);
+  const verified = Boolean(
+    snapshot?.profile?.kycStatus === 'approved'
+      || snapshot?.profile?.verified
+      || snapshot?.meta?.verified,
+  );
 
   const [step, setStep] = useState(1);
   const [picker, setPicker] = useState(null);

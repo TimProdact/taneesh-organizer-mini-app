@@ -7,6 +7,8 @@ export const SCREENS = {
   AUDIENCE: 'audience',
   CONTROLLERS: 'controllers',
   FINANCE: 'finance',
+  KYC: 'kyc',
+  DOCUMENTS: 'documents',
   PROFILE_EDIT: 'profile-edit',
   PROFILE_LOGO: 'profile-logo',
   SOCIALS: 'socials',

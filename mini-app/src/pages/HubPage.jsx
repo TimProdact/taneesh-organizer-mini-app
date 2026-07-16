@@ -1,9 +1,32 @@
 import { Icon24QR } from '@telegram-apps/telegram-ui/dist/icons/24/qr';
+import { Icon24ChevronRight } from '@telegram-apps/telegram-ui/dist/icons/24/chevron_right';
 import { MenuGroup, MenuRow } from '../components/MenuRow.jsx';
 import { HubHeroMeta } from '../components/HubHeroMeta.jsx';
 import { pendingOrders, profileOf, publicPageUrl } from '../utils.js';
 import { haptic } from '../api.js';
 import { SCREENS } from '../navigation/screens.js';
+
+function kycBannerCopy(status) {
+  if (status === 'pending') {
+    return {
+      title: 'KYC на проверке',
+      body: 'Заявка у модератора · обычно до 24 часов',
+      tone: 'pending',
+    };
+  }
+  if (status === 'rejected') {
+    return {
+      title: 'KYC отклонён',
+      body: 'Исправьте данные и отправьте снова',
+      tone: 'rejected',
+    };
+  }
+  return {
+    title: 'KYC не пройден',
+    body: 'Нужен для платных событий и выплат',
+    tone: 'idle',
+  };
+}
 
 export function HubPage({ snapshot, push }) {
   const tg = window.Telegram?.WebApp;
@@ -14,6 +37,10 @@ export function HubPage({ snapshot, push }) {
   const logoEmoji = profile.logoEmoji || '🎟️';
   const events = snapshot.events || [];
   const url = publicPageUrl();
+  const kycStatus =
+    profile.kycStatus || (profile.verified || snapshot.meta?.verified ? 'approved' : 'idle');
+  const showKyc = kycStatus !== 'approved';
+  const kycCopy = kycBannerCopy(kycStatus);
 
   const openPublicPage = () => {
     haptic('light');
@@ -62,6 +89,24 @@ export function HubPage({ snapshot, push }) {
       </header>
 
       <div className="fm-hub-stack">
+        {showKyc ? (
+          <button
+            type="button"
+            className={`fm-hub-kyc fm-hub-kyc--${kycCopy.tone} fm-tap`}
+            onClick={() => {
+              haptic('selection');
+              push(SCREENS.KYC);
+            }}
+          >
+            <span className="fm-hub-kyc-glyph" aria-hidden>🛡️</span>
+            <span className="fm-hub-kyc-copy">
+              <span className="fm-hub-kyc-title">{kycCopy.title}</span>
+              <span className="fm-hub-kyc-body">{kycCopy.body}</span>
+            </span>
+            <Icon24ChevronRight className="fm-hub-kyc-chevron" />
+          </button>
+        ) : null}
+
         <MenuGroup>
           <MenuRow
             label="Мероприятия"
@@ -90,6 +135,16 @@ export function HubPage({ snapshot, push }) {
             tone="#34c759"
             badge={pending.length || undefined}
             onClick={() => push(SCREENS.FINANCE)}
+            last
+          />
+        </MenuGroup>
+
+        <MenuGroup>
+          <MenuRow
+            label="Документы"
+            glyph="📄"
+            tone="#8e8e93"
+            onClick={() => push(SCREENS.DOCUMENTS)}
             last
           />
         </MenuGroup>
