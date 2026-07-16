@@ -336,27 +336,34 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
             <>
               <p className="fm-media-hint">Хотя бы одно фото, максимум 6</p>
               <div className="fm-photo-grid">
-                {photos.map((src, idx) => (
-                  <div key={idx} className="fm-photo-tile">
-                    <img src={src} alt="" />
+                {Array.from({ length: 6 }).map((_, idx) => {
+                  const src = photos[idx];
+                  if (src) {
+                    return (
+                      <div key={idx} className="fm-photo-tile">
+                        <img src={src} alt="" />
+                        <button
+                          type="button"
+                          className="fm-photo-remove"
+                          onClick={() => setPhotos((p) => p.filter((_, i) => i !== idx))}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
                     <button
+                      key={idx}
                       type="button"
-                      className="fm-photo-remove"
-                      onClick={() => setPhotos((p) => p.filter((_, i) => i !== idx))}
+                      className="fm-photo-add"
+                      disabled={idx !== photos.length}
+                      onClick={() => fileRef.current?.click()}
                     >
-                      ✕
+                      + Фото
                     </button>
-                  </div>
-                ))}
-                {photos.length < 6 ? (
-                  <button
-                    type="button"
-                    className="fm-photo-add"
-                    onClick={() => fileRef.current?.click()}
-                  >
-                    + Фото
-                  </button>
-                ) : null}
+                  );
+                })}
               </div>
               <input
                 ref={fileRef}
