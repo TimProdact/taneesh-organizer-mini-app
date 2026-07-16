@@ -11,8 +11,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { Icon24QR } from '@telegram-apps/telegram-ui/dist/icons/24/qr';
 import { HubHeroMeta } from '../components/HubHeroMeta.jsx';
-import { StickyPageCta } from '../components/StickyPageCta.jsx';
-import { pendingOrders, profileOf, publicPageUrl } from '../utils.js';
+import { pendingOrders, profileOf } from '../utils.js';
 import { haptic } from '../api.js';
 import { SCREENS } from '../navigation/screens.js';
 
@@ -45,24 +44,16 @@ function MenuIcon({ tone, children }) {
 }
 
 export function HubPage({ snapshot, push }) {
-  const tg = window.Telegram?.WebApp;
   const pending = pendingOrders(snapshot.orders);
   const profile = profileOf(snapshot);
   const displayName = profile.displayName || profile.name || 'Taneesh Organizer';
   const avatarUrl = profile.avatarUrl || profile.logoUrl || '';
   const logoEmoji = profile.logoEmoji || '🎟️';
   const events = snapshot.events || [];
-  const url = publicPageUrl();
   const kycStatus =
     profile.kycStatus || (profile.verified || snapshot.meta?.verified ? 'approved' : 'idle');
   const showKyc = kycStatus !== 'approved';
   const kycCopy = kycBannerCopy(kycStatus);
-
-  const openPublicPage = () => {
-    haptic('light');
-    if (tg?.openLink) tg.openLink(url);
-    else window.open(url, '_blank', 'noopener');
-  };
 
   const go = (screen, params) => {
     haptic('selection');
@@ -70,7 +61,7 @@ export function HubPage({ snapshot, push }) {
   };
 
   return (
-    <main className="fm-twa fm-home fm-hub fm-hub--sticky-cta">
+    <main className="fm-twa fm-home fm-hub">
       <header className="fm-hub-hero">
         <div className="fm-hub-hero-bar">
           <IconButton
@@ -193,14 +184,9 @@ export function HubPage({ snapshot, push }) {
         </Section>
       </List>
 
-      <StickyPageCta>
-        <Button mode="filled" size="l" stretched onClick={openPublicPage}>
-          Открыть страницу
-        </Button>
-        <footer className="fm-hub-footer">
-          <span>@taneesh_org_bot</span>
-        </footer>
-      </StickyPageCta>
+      <footer className="fm-hub-footer">
+        <span>@taneesh_org_bot</span>
+      </footer>
     </main>
   );
 }
