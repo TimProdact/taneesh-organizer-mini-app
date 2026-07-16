@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SegmentedControl } from '@telegram-apps/telegram-ui';
+import { List, Placeholder, Section, SegmentedControl } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { EntityListRow } from '../components/EntityListRow.jsx';
 import { formatPrice, orderStatusLabel } from '../utils.js';
@@ -18,7 +18,7 @@ export function OrdersPage({ snapshot, push }) {
   return (
     <SubpageLayout>
       <PageHeader title="Продажи" subtitle={`${orders.length} всего`} />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         <div className="fm-segment-wrap fm-segment-wrap--media">
           <SegmentedControl>
             <SegmentedControl.Item
@@ -37,24 +37,24 @@ export function OrdersPage({ snapshot, push }) {
         </div>
 
         {filtered.length > 0 ? (
-          <div className="fm-inset-card fm-entity-list">
-            {filtered.map((order, index) => (
+          <Section>
+            {filtered.map((order) => (
               <EntityListRow
                 key={order.id}
                 glyph="🧾"
                 title={`${order.receipt} · ${orderStatusLabel(order.status)}`}
                 subtitle={`${order.buyer?.phone || '—'} · ${formatPrice(order.amount)}`}
-                last={index === filtered.length - 1}
                 onClick={() => push(SCREENS.SALE_DETAIL, { orderId: order.id })}
               />
             ))}
-          </div>
+          </Section>
         ) : (
-          <p className="fm-empty-hint">
-            {filter === 'new' ? 'Новых заказов нет' : 'Заказов пока нет'}
-          </p>
+          <Placeholder
+            header={filter === 'new' ? 'Новых заказов нет' : 'Заказов пока нет'}
+            description="Появятся после первых продаж"
+          />
         )}
-      </div>
+      </List>
     </SubpageLayout>
   );
 }

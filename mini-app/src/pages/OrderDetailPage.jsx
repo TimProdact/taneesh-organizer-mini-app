@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
+import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
@@ -48,41 +48,41 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
   return (
     <SubpageLayout>
       <PageHeader title="Заказ" subtitle={date} />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         <ValueGroup>
           <ValueRow label="Статус" value={orderStatusLabel(order.status)} muted />
-          <ValueRow label="Чек" value={order.receipt} last />
+          <ValueRow label="Чек" value={order.receipt} />
         </ValueGroup>
 
-        <ValueGroup className="fm-value-group--spaced">
+        <ValueGroup header="Покупатель">
           <ValueRow label="Имя" value={order.buyer?.name || '—'} />
           <ValueRow label="Телефон" value={order.buyer?.phone || '—'} />
           <ValueRow label="Доставка" value={deliveryTypeLabel(order.buyer?.deliveryType)} />
-          <ValueRow label="Адрес" value={order.buyer?.address || '—'} last />
+          <ValueRow label="Адрес" value={order.buyer?.address || '—'} />
         </ValueGroup>
 
-        <ValueGroup className="fm-value-group--spaced">
+        <ValueGroup header="Оплата">
           <ValueRow label="Ивент" value={order.eventName || order.productName || '—'} />
           <ValueRow label="Тип билета" value={order.ticketType || order.edition || '—'} />
           <ValueRow label="Сумма" value={formatPrice(order.amount)} />
-          <ValueRow label="Оплата" value={order.paymentMethod || '—'} last />
+          <ValueRow label="Оплата" value={order.paymentMethod || '—'} />
         </ValueGroup>
 
         {order.deliveryUrl ? (
-          <ValueGroup className="fm-value-group--spaced">
-            <ValueRow label="Яндекс Доставка" value={order.deliveryUrl} last />
+          <ValueGroup header="Доставка">
+            <ValueRow label="Яндекс Доставка" value={order.deliveryUrl} />
           </ValueGroup>
         ) : null}
 
         {order.refundId ? (
-          <ValueGroup className="fm-value-group--spaced">
-            <ValueRow label="Возврат" value={order.refundId} last />
+          <ValueGroup>
+            <ValueRow label="Возврат" value={order.refundId} />
           </ValueGroup>
         ) : null}
 
-        {(canShip || canCancel) && (
-          <div className="fm-page-cta fm-page-cta--separated fm-page-cta--stack">
-            {canShip && (
+        {(canShip || canCancel) ? (
+          <div className="fm-page-cta fm-page-cta--stack">
+            {canShip ? (
               <Button
                 mode="filled"
                 size="l"
@@ -92,8 +92,8 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
               >
                 Подтвердить отправку
               </Button>
-            )}
-            {canCancel && (
+            ) : null}
+            {canCancel ? (
               <Button
                 mode="plain"
                 size="l"
@@ -104,10 +104,10 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
               >
                 Отменить заказ и вернуть деньги
               </Button>
-            )}
+            ) : null}
           </div>
-        )}
-      </div>
+        ) : null}
+      </List>
 
       <FieldSheet
         open={shipSheet}

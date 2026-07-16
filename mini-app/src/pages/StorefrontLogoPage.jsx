@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@telegram-apps/telegram-ui';
+import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { haptic, runActionSafe } from '../api.js';
@@ -34,7 +34,7 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
   return (
     <SubpageLayout>
       <PageHeader title="Логотип" subtitle="Фото профиля" />
-      <div className="fm-page-body">
+      <List className="fm-page-list">
         <div className="fm-storefront-hero">
           <div className="fm-storefront-hero-preview" aria-hidden>
             {photoPreview ? (
@@ -46,12 +46,12 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
         </div>
 
         <p className="fm-media-hint">Ссылка на фото логотипа</p>
-        <div className="fm-page-cta fm-page-cta--separated">
+        <div className="fm-page-cta">
           <Button mode="filled" size="l" stretched disabled={busy} onClick={() => setSheet(true)}>
             {photoPreview ? 'Заменить фото' : 'Указать ссылку на фото'}
           </Button>
         </div>
-      </div>
+      </List>
 
       <FieldSheet
         open={sheet}

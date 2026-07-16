@@ -33,13 +33,13 @@ html, body, #root {
 .fm-page-header {
   display: flex;
   flex-direction: row;
-  align-items: baseline;
+  align-items: center;
   justify-content: flex-start;
   gap: 12px;
   width: 100%;
   box-sizing: border-box;
   margin: 0;
-  padding: var(--fm-page-header-pt) var(--fm-page-header-px) var(--fm-page-header-pb);
+  padding: var(--fm-page-header-pt) 0 var(--fm-page-header-pb);
 }
 
 .fm-page-nav-title {
@@ -1462,11 +1462,6 @@ button.fm-value-row {
 
 .fm-page-cta {
   padding: 0;
-}
-
-.fm-page-body {
-  display: flex;
-  flex-direction: column;
 }
 
 .fm-event-thumb {

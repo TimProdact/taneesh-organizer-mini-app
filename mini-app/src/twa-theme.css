@@ -287,13 +287,40 @@ html[data-tgui-platform='android'] body {
   font-size: var(--fm-icon-glyph);
 }
 
-/* CTA / Placeholder share the same content width */
+/* CTA / Placeholder / hints share the same content width */
 .fm-hub-list > .fm-hub-cta,
 .fm-page-list > .fm-page-cta,
 .fm-hub-list > [class*='Placeholder'],
-.fm-page-list > [class*='Placeholder'] {
-  margin: 0;
+.fm-page-list > [class*='Placeholder'],
+.fm-page-list > .fm-media-hint,
+.fm-page-list > .fm-storefront-hero,
+.fm-page-list > .fm-event-hero,
+.fm-page-list > .fm-segment-wrap {
+  margin-left: 0;
+  margin-right: 0;
   width: 100%;
+  box-sizing: border-box;
+}
+
+/* ValueGroup spacing comes from list gap, not local margins */
+.fm-page-list .fm-value-group--spaced,
+.fm-hub-list .fm-value-group--spaced {
+  margin-top: 0;
+}
+
+/* Inputs / controls fill the content grid */
+.fm-page-list > [class*='Input'],
+.fm-hub-list > [class*='Input'] {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Legacy fm-page-body → same rhythm as fm-page-list */
+.fm-page-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--fm-space-section);
+  padding: var(--fm-space-section) 0 calc(12px + env(safe-area-inset-bottom));
   box-sizing: border-box;
 }
 
