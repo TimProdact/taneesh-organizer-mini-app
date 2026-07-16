@@ -3100,3 +3100,45 @@ button.fm-value-row {
   display: grid;
   place-items: center;
 }
+
+.fm-controller-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 8px;
+}
+
+.fm-controller-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 8px;
+}
+
+.fm-controller-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--tg-theme-hint-color) 10%, transparent);
+}
+
+.fm-controller-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.fm-controller-stat-label {
+  font-size: 14px;
+  color: var(--tg-theme-hint-color);
+}
+
+.fm-controller-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  text-align: right;
+  color: var(--tg-theme-text-color);
+}

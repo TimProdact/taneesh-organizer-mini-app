@@ -301,5 +301,38 @@ export async function runAction(adminAction, payload = {}) {
     return getSnapshot();
   }
 
+  if (adminAction === 'add_controller') {
+    if (store.controllers.length >= 5) {
+      throw new Error('Максимальное количество контролеров: 5');
+    }
+    const name = String(payload.name || '').trim();
+    const phoneNational = String(payload.phoneNational || '')
+      .replace(/\D/g, '')
+      .replace(/^998/, '')
+      .slice(0, 9);
+    if (!name) throw new Error('Укажите имя и фамилию');
+    if (phoneNational.length !== 9) throw new Error('Укажите номер телефона (+998)');
+    const dup = store.controllers.some((c) => c.phoneNational === phoneNational);
+    if (dup) throw new Error('Контролер с таким номером уже есть');
+    store.controllers.push({
+      id: `ctl-${Date.now()}`,
+      name,
+      phoneNational,
+      phone: payload.phone || `+998${phoneNational}`,
+      scanCount: 0,
+      addedAt: new Date().toISOString(),
+      lastLoginAt: null,
+    });
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'remove_controller') {
+    const id = payload.controllerId;
+    store.controllers = store.controllers.filter((c) => String(c.id) !== String(id));
+    refreshMeta();
+    return getSnapshot();
+  }
+
   return getSnapshot();
 }

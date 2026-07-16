@@ -116,7 +116,7 @@ export default function App() {
       case SCREENS.AUDIENCE:
         return <AudiencePage snapshot={snapshot} />;
       case SCREENS.CONTROLLERS:
-        return <ControllersPage snapshot={snapshot} />;
+        return <ControllersPage snapshot={snapshot} onSnapshotChange={setSnapshot} />;
       case SCREENS.FINANCE:
         return <FinancePage snapshot={snapshot} />;
       case SCREENS.KYC:
