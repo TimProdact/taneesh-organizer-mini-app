@@ -129,6 +129,7 @@ export function HubPage({ snapshot, push }) {
 
         <Section>
           <Cell
+            className="fm-tgui-cell"
             before={<MenuIcon tone="#007aff">📅</MenuIcon>}
             after={(
               <Navigation>
@@ -140,6 +141,7 @@ export function HubPage({ snapshot, push }) {
             Мероприятия
           </Cell>
           <Cell
+            className="fm-tgui-cell"
             before={<MenuIcon tone="#af52de">👥</MenuIcon>}
             after={(
               <Navigation>
@@ -151,6 +153,7 @@ export function HubPage({ snapshot, push }) {
             Аудитория (CRM)
           </Cell>
           <Cell
+            className="fm-tgui-cell"
             before={<MenuIcon tone="#ff9500">📷</MenuIcon>}
             after={(
               <Navigation>
@@ -162,6 +165,7 @@ export function HubPage({ snapshot, push }) {
             Контролеры
           </Cell>
           <Cell
+            className="fm-tgui-cell"
             before={<MenuIcon tone="#34c759">💳</MenuIcon>}
             after={(
               <Navigation>
@@ -178,6 +182,7 @@ export function HubPage({ snapshot, push }) {
 
         <Section header="Юридическое">
           <Cell
+            className="fm-tgui-cell"
             before={<MenuIcon tone="#8e8e93">📄</MenuIcon>}
             after={<Navigation />}
             onClick={() => go(SCREENS.DOCUMENTS)}

@@ -60,7 +60,7 @@ export function AudiencePage({ snapshot }) {
             {filtered.map((p) => (
               <Cell
                 key={p.id}
-                className="fm-entity-row"
+                className="fm-tgui-entity-row"
                 before={(
                   <Avatar
                     size={40}

@@ -13,7 +13,7 @@ export function EntityListRow({
   void last;
   return (
     <Cell
-      className="fm-entity-row"
+      className="fm-tgui-entity-row"
       before={glyph ? <span className="fm-entity-glyph" aria-hidden>{glyph}</span> : undefined}
       subtitle={subtitle ? previewLine(subtitle, '') : undefined}
       after={<Navigation />}

@@ -84,7 +84,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
             {filtered.map((event) => (
               <Cell
                 key={event.id}
-                className="fm-entity-row"
+                className="fm-tgui-entity-row"
                 before={
                   event.photos?.[0] ? (
                     <img src={event.photos[0]} alt="" className="fm-event-thumb" />

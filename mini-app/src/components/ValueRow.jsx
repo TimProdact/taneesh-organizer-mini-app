@@ -25,7 +25,7 @@ export function ValueRow({
 
   return (
     <Cell
-      className="fm-value-row"
+      className="fm-tgui-value-row"
       before={leading || undefined}
       after={(
         <span className="fm-value-after">
@@ -61,7 +61,7 @@ export function StepperRow({
   void last;
   return (
     <Cell
-      className="fm-value-row"
+      className="fm-tgui-value-row"
       after={(
         <div className="fm-stepper fm-stepper--compact">
           <button
@@ -99,7 +99,7 @@ export function SwitchRow({ label, checked, onChange, last = false }) {
   void last;
   return (
     <Cell
-      className="fm-value-row"
+      className="fm-tgui-value-row"
       after={(
         <Switch
           checked={checked}

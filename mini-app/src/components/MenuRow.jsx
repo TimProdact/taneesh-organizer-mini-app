@@ -21,6 +21,7 @@ export function MenuRow({
   void last;
   return (
     <Cell
+      className="fm-tgui-cell"
       before={
         glyph ? (
           <span className="fm-hub-cell-icon" style={{ backgroundColor: tone }} aria-hidden>

@@ -1207,7 +1207,8 @@ html, body, #root {
   overflow: hidden;
 }
 
-.fm-value-row {
+/* Legacy button rows only — do not apply to kit Cell (.fm-tgui-*) */
+button.fm-value-row {
   appearance: none;
   border: 0;
   width: 100%;
@@ -1495,19 +1496,28 @@ button.fm-value-row {
 }
 
 /*
- * ValueRow — kit hashes class names, so never use [class*='after'].
- * Cell children: [before?] + middle + after. after = :last-child.
- * Layout: [label] ………… [value…] [>]
+ * Kit Cell rows — class names must NOT collide with legacy .fm-value-row /
+ * .fm-entity-row (those use display:grid and destroy before|middle|after).
+ * Never use [class*='Cell'|'after'] — telegram-ui hashes to tgui-*.
  */
-.fm-value-row {
+.fm-tgui-cell,
+.fm-tgui-value-row,
+.fm-tgui-entity-row {
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
   align-items: center !important;
+  gap: 16px !important;
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  box-sizing: border-box;
+  min-width: 0;
+  width: 100%;
+  --tgui--cell--middle--padding: var(--fm-cell-py, 16px) 0;
 }
 
-/* middle (label) — natural width, never ellipsis */
-.fm-value-row > :nth-last-child(2) {
+/* ValueRow: [label] …… [value…] [>] */
+.fm-tgui-value-row > :nth-last-child(2) {
   flex: 0 0 auto !important;
   flex-grow: 0 !important;
   max-width: 46%;
@@ -1515,14 +1525,13 @@ button.fm-value-row {
   overflow: visible !important;
 }
 
-.fm-value-row > :nth-last-child(2) * {
+.fm-tgui-value-row > :nth-last-child(2) * {
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap !important;
 }
 
-/* after wrapper — takes remaining width */
-.fm-value-row > :last-child {
+.fm-tgui-value-row > :last-child {
   flex: 1 1 0% !important;
   min-width: 0 !important;
   max-width: none !important;
@@ -1562,20 +1571,26 @@ button.fm-value-row {
   flex-shrink: 0;
 }
 
-/* Entity list rows — single-line subtitle via our class only */
-.fm-entity-row {
-  flex-wrap: nowrap !important;
+/* Entity list: [thumb] [title+subtitle…] [>] — one horizontal line */
+.fm-tgui-entity-row > :first-child {
+  flex: 0 0 auto !important;
 }
 
-.fm-entity-row > :nth-last-child(2) {
-  min-width: 0;
-  overflow: hidden;
+.fm-tgui-entity-row > :nth-last-child(2) {
+  flex: 1 1 0% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
 }
 
-.fm-entity-row > :nth-last-child(2) * {
+.fm-tgui-entity-row > :nth-last-child(2) * {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+}
+
+.fm-tgui-entity-row > :last-child {
+  flex: 0 0 auto !important;
+  margin-left: auto;
 }
 
 .fm-page-cta--separated {
@@ -1647,7 +1662,8 @@ button.fm-value-row {
   overflow: hidden;
 }
 
-.fm-entity-row {
+/* Legacy button rows only — do not apply to kit Cell (.fm-tgui-*) */
+button.fm-entity-row {
   appearance: none;
   border: 0;
   width: 100%;

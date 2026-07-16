@@ -12,7 +12,7 @@
   --fm-space-card: 12px;
   --fm-space-card-x: 16px;
   --fm-space-card-bottom: 14px;
-  --fm-cell-py: 16px; /* top/bottom inside Cell rows */
+  --fm-cell-py: 18px; /* top/bottom inside Cell rows */
   --fm-gap-row: 16px;
   --fm-gap-tight: 8px;
   --fm-gap-micro: 6px;
@@ -262,9 +262,13 @@ html[data-tgui-platform='android'] body {
   padding-right: 16px !important;
 }
 
-/* Lock Cell metrics to iOS Settings (kit uses 24px gap on `base` / Desktop) */
-.fm-hub-list [class*='Cell'],
-.fm-page-list [class*='Cell'] {
+/* Lock Cell metrics via our classes — kit hashes to tgui-*, [class*='Cell'] never matches */
+.fm-hub-list .fm-tgui-cell,
+.fm-hub-list .fm-tgui-value-row,
+.fm-hub-list .fm-tgui-entity-row,
+.fm-page-list .fm-tgui-cell,
+.fm-page-list .fm-tgui-value-row,
+.fm-page-list .fm-tgui-entity-row {
   gap: 16px !important;
   padding-left: 16px !important;
   padding-right: 16px !important;
