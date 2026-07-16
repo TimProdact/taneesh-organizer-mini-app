@@ -4,8 +4,9 @@
  */
 
 :root {
-  /* ── Spacing (Telegram Settings inset-grouped) ── */
-  --fm-space-page: 16px;
+  /* ── Spacing — one content grid for all pages ── */
+  --fm-content-gutter: 16px;
+  --fm-space-page: var(--fm-content-gutter);
   --fm-space-section: 22px;
   --fm-space-card: 12px;
   --fm-space-card-x: 16px;
@@ -14,8 +15,8 @@
   --fm-gap-tight: 8px;
   --fm-gap-micro: 6px;
   --fm-gap-stack: 2px;
-  --fm-list-pad-x: 16px;
-  --fm-list-pad-y: 10px;
+  --fm-list-pad-x: 0px;
+  --fm-list-pad-y: 8px;
 
   /* ── Icons (Settings menu tiles) ── */
   --fm-icon-sm: 20px;
@@ -68,9 +69,9 @@
   --fm-text-title: 20px;
   --fm-text-headline: 17px;
   --fm-text-page-title: 18px;
-  --fm-page-header-pt: 24px;
-  --fm-page-header-px: 20px;
-  --fm-page-header-pb: 20px;
+  --fm-page-header-pt: 20px;
+  --fm-page-header-px: 0px;
+  --fm-page-header-pb: 12px;
   --fm-text-body: 15px;
   --fm-text-caption: 12px;
 }
@@ -202,8 +203,15 @@ html[data-tgui-platform='android'] body {
 /* ── Inset-grouped lists (Telegram Settings) ── */
 .fm-hub-list,
 .fm-page-list {
-  padding: var(--fm-list-pad-y) var(--fm-list-pad-x) !important;
+  /* Horizontal = parent gutter only (--fm-content-gutter) */
+  padding: var(--fm-list-pad-y) 0 calc(12px + env(safe-area-inset-bottom)) !important;
   box-sizing: border-box;
+}
+
+/* Hub list has no SubpageLayout — apply the same content gutter */
+.fm-hub > .fm-hub-list {
+  padding-left: var(--fm-content-gutter) !important;
+  padding-right: var(--fm-content-gutter) !important;
 }
 
 .fm-hub-list > :not(:last-child),
@@ -259,8 +267,9 @@ html[data-tgui-platform='android'] body {
 .fm-subpage-inset {
   display: flex;
   flex-direction: column;
-  gap: var(--fm-space-section);
-  padding: 0 var(--fm-space-page) calc(20px + env(safe-area-inset-bottom));
+  gap: 0;
+  padding: 0 var(--fm-content-gutter) calc(20px + env(safe-area-inset-bottom));
+  box-sizing: border-box;
 }
 
 .fm-inset-section-stack {

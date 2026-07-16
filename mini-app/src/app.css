@@ -32,13 +32,13 @@ html, body, #root {
 
 .fm-page-header {
   display: flex;
+  flex-direction: row;
   align-items: baseline;
-  justify-content: space-between;
-  gap: var(--fm-gap-row);
-  margin-left: calc(-1 * var(--fm-space-page));
-  margin-right: calc(-1 * var(--fm-space-page));
-  width: calc(100% + 2 * var(--fm-space-page));
+  justify-content: flex-start;
+  gap: 12px;
+  width: 100%;
   box-sizing: border-box;
+  margin: 0;
   padding: var(--fm-page-header-pt) var(--fm-page-header-px) var(--fm-page-header-pb);
 }
 
@@ -51,13 +51,16 @@ html, body, #root {
   line-height: 1.25;
   letter-spacing: -0.01em;
   color: var(--tg-theme-text-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .fm-page-nav-subtitle {
   margin: 0;
   flex-shrink: 1;
   min-width: 0;
-  max-width: 52%;
+  max-width: 48%;
   font-size: 13px;
   line-height: 1.25;
   font-weight: 400;
@@ -70,6 +73,13 @@ html, body, #root {
 
 .fm-twa .fm-segment-wrap {
   padding: 12px var(--fm-space-card, 12px) 8px;
+}
+
+.fm-page-list > .fm-segment-wrap,
+.fm-hub-list > .fm-segment-wrap,
+.fm-page-list .fm-segment-wrap--media {
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .fm-inset-card [class*='List'] {
@@ -1458,10 +1468,6 @@ button.fm-value-row {
 .fm-page-body {
   display: flex;
   flex-direction: column;
-}
-
-.fm-page-list {
-  padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
 
 .fm-event-thumb {
@@ -3320,18 +3326,14 @@ button.fm-value-row {
   color: var(--tg-theme-text-color);
 }
 
-.fm-page-header--split {
-  align-items: flex-start;
-}
-
-.fm-page-header-main {
-  flex: 1;
-  min-width: 0;
+.fm-page-header--trailing {
+  align-items: center;
 }
 
 .fm-page-header-trailing {
   flex-shrink: 0;
-  padding-top: 2px;
+  display: flex;
+  align-items: center;
 }
 
 .fm-page-more {
