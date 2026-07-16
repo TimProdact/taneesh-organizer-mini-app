@@ -2,26 +2,22 @@ import { useState } from 'react';
 import { Button } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { EntityListRow } from '../components/EntityListRow.jsx';
-import { LaunchDropSheet } from '../components/LaunchDropSheet.jsx';
-import { formatDropDate, phaseLabel } from '../utils.js';
+import { CreateEventSheet } from '../components/CreateEventSheet.jsx';
+import { formatEventDate, phaseLabel } from '../utils.js';
 import { SCREENS } from '../navigation/screens.js';
-
-function listEvents(snapshot) {
-  return snapshot.events || snapshot.drops || [];
-}
 
 function eventSubtitle(event) {
   const status = phaseLabel(event.phase, event.paused);
-  const date = formatDropDate(event.startsAt);
-  const capacity = event.totalStock != null
-    ? ` · ${event.stock ?? 0} из ${event.totalStock}`
+  const date = formatEventDate(event.startsAt);
+  const tickets = event.ticketsTotal != null
+    ? ` · ${event.ticketsLeft ?? 0} из ${event.ticketsTotal}`
     : '';
-  return `${status} · ${date}${capacity}`;
+  return `${status} · ${date}${tickets}`;
 }
 
-export function DropsListPage({ snapshot, onSnapshotChange, push }) {
-  const events = listEvents(snapshot);
-  const [launchOpen, setLaunchOpen] = useState(false);
+export function EventsListPage({ snapshot, onSnapshotChange, push }) {
+  const events = snapshot.events || [];
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <SubpageLayout>
@@ -33,10 +29,10 @@ export function DropsListPage({ snapshot, onSnapshotChange, push }) {
               <EntityListRow
                 key={event.id}
                 glyph="📅"
-                title={event.name || event.productName || 'Мероприятие'}
+                title={event.name || 'Мероприятие'}
                 subtitle={eventSubtitle(event)}
                 last={index === events.length - 1}
-                onClick={() => push(SCREENS.DROP, { dropId: event.id })}
+                onClick={() => push(SCREENS.EVENT, { eventId: event.id })}
               />
             ))}
           </div>
@@ -44,16 +40,15 @@ export function DropsListPage({ snapshot, onSnapshotChange, push }) {
           <p className="fm-empty-hint">Создай первое мероприятие — название, дата и число билетов</p>
         )}
         <div className="fm-page-cta fm-page-cta--separated">
-          <Button mode="filled" size="l" stretched onClick={() => setLaunchOpen(true)}>
+          <Button mode="filled" size="l" stretched onClick={() => setCreateOpen(true)}>
             + Создать мероприятие
           </Button>
         </div>
       </div>
-      <LaunchDropSheet
-        open={launchOpen}
-        snapshot={snapshot}
+      <CreateEventSheet
+        open={createOpen}
         onSnapshotChange={onSnapshotChange}
-        onClose={() => setLaunchOpen(false)}
+        onClose={() => setCreateOpen(false)}
       />
     </SubpageLayout>
   );

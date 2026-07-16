@@ -45,7 +45,7 @@ export function OrdersPage({ snapshot, push }) {
                 title={`${order.receipt} · ${orderStatusLabel(order.status)}`}
                 subtitle={`${order.buyer?.phone || '—'} · ${formatPrice(order.amount)}`}
                 last={index === filtered.length - 1}
-                onClick={() => push(SCREENS.ORDER_DETAIL, { orderId: order.id })}
+                onClick={() => push(SCREENS.SALE_DETAIL, { orderId: order.id })}
               />
             ))}
           </div>

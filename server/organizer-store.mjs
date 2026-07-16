@@ -128,31 +128,27 @@ function defaultStore() {
     {
       id: 'evt-demo-1',
       name: 'Demo Event',
-      stock: 40,
-      totalStock: 100,
+      ticketsLeft: 40,
+      ticketsTotal: 100,
       startsAt: new Date(now + 86_400_000).toISOString(),
       paused: false,
-      phase: 'pre_drop',
+      phase: 'upcoming',
       visible: true,
     },
   ];
   return {
-    storefront: {
+    profile: {
       displayName: 'Taneesh Organizer',
       bio: '',
       avatarUrl: '',
       logoEmoji: '🎟️',
-      socials: {},
     },
-    brand: { name: 'Taneesh Organizer', logoEmoji: '🎟️' },
-    // events — канон; drops — alias для старых экранов
     events,
-    drops: events,
-    products: [],
     orders: [],
     audience: [],
-    waitlist: [],
     controllers: [],
+    finance: { hold: 0, totalPaid: 0, history: [] },
+    socialLinks: [],
     meta: {
       eventsCount: events.length,
       audienceCount: 0,
@@ -164,50 +160,56 @@ function defaultStore() {
 
 let store = defaultStore();
 
-function syncAliases() {
-  store.drops = store.events;
-  store.waitlist = store.audience;
+function refreshMeta() {
   store.meta = {
     ...store.meta,
     eventsCount: store.events.length,
     audienceCount: store.audience.length,
-    controllersCount: (store.controllers || []).length,
+    controllersCount: store.controllers.length,
   };
 }
 
 export async function runAction(adminAction, payload = {}) {
   if (adminAction === 'create_event') {
-    const id = `evt-${Date.now()}`;
     const capacity = Math.max(1, Number(payload.capacity) || 100);
     store.events.push({
-      id,
+      id: `evt-${Date.now()}`,
       name: String(payload.name || 'Мероприятие').trim(),
-      stock: capacity,
-      totalStock: capacity,
+      ticketsLeft: capacity,
+      ticketsTotal: capacity,
       startsAt: payload.startsAt || new Date().toISOString(),
       paused: false,
-      phase: 'pre_drop',
+      phase: 'upcoming',
       visible: true,
     });
-    syncAliases();
+    refreshMeta();
     return getSnapshot();
   }
 
-  if (adminAction === 'set_starts_at' || adminAction === 'set_stock' || adminAction === 'set_paused' || adminAction === 'set_event_visible' || adminAction === 'set_drop_visible') {
-    const id = payload.eventId || payload.dropId;
-    const event = store.events.find((e) => e.id === id);
+  if (
+    adminAction === 'set_starts_at' ||
+    adminAction === 'set_tickets_left' ||
+    adminAction === 'set_paused' ||
+    adminAction === 'set_event_visible'
+  ) {
+    const event = store.events.find((e) => e.id === payload.eventId);
     if (event) {
       if (payload.startsAt != null) event.startsAt = payload.startsAt;
-      if (payload.stock != null) event.stock = payload.stock;
+      if (payload.ticketsLeft != null) event.ticketsLeft = payload.ticketsLeft;
       if (payload.paused != null) event.paused = payload.paused;
       if (payload.visible != null) event.visible = payload.visible;
     }
-    syncAliases();
+    refreshMeta();
     return getSnapshot();
   }
 
-  if (adminAction === 'update_storefront') {
-    store.storefront = { ...store.storefront, ...(payload.storefront || {}) };
+  if (adminAction === 'update_profile') {
+    store.profile = { ...store.profile, ...(payload.profile || {}) };
+    return getSnapshot();
+  }
+
+  if (adminAction === 'update_social_links') {
+    store.socialLinks = payload.socialLinks || [];
     return getSnapshot();
   }
 

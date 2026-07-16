@@ -11,8 +11,8 @@ function toDateValue(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function toTimeValue(iso) {
-  const d = iso ? new Date(iso) : new Date();
+function toTimeValue() {
+  const d = new Date();
   d.setHours(20, 0, 0, 0);
   const pad = (n) => String(n).padStart(2, '0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -27,8 +27,7 @@ function mergeDateTime(datePart, timePart) {
   return base.toISOString();
 }
 
-/** Wizard создания мероприятия (без каталога товаров). */
-export function LaunchDropSheet({ open, snapshot, onSnapshotChange, onClose }) {
+export function CreateEventSheet({ open, onSnapshotChange, onClose }) {
   const [step, setStep] = useState(1);
   const [name, setName] = useState('');
   const [date, setDate] = useState('');
@@ -40,11 +39,11 @@ export function LaunchDropSheet({ open, snapshot, onSnapshotChange, onClose }) {
     if (!open) return;
     setStep(1);
     setName('');
-    setDate(toDateValue(snapshot?.startsAt));
-    setTime(toTimeValue(snapshot?.startsAt));
+    setDate(toDateValue());
+    setTime(toTimeValue());
     setCapacity(100);
     setBusy(false);
-  }, [open, snapshot]);
+  }, [open]);
 
   const next = () => {
     if (!name.trim()) return;

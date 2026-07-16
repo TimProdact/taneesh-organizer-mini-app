@@ -6,11 +6,13 @@ import { useNavStack } from './hooks/useNavStack.js';
 import { waitForInitData, hasTelegramContext } from './telegram-init.js';
 import { SCREENS } from './navigation/screens.js';
 import { HubPage } from './pages/HubPage.jsx';
-import { DropsListPage } from './pages/DropsListPage.jsx';
-import { DropPage } from './pages/DropPage.jsx';
+import { EventsListPage } from './pages/EventsListPage.jsx';
+import { EventPage } from './pages/EventPage.jsx';
 import { OrdersPage } from './pages/OrdersPage.jsx';
 import { OrderDetailPage } from './pages/OrderDetailPage.jsx';
-import { WaitlistPage } from './pages/WaitlistPage.jsx';
+import { AudiencePage } from './pages/AudiencePage.jsx';
+import { ControllersPage } from './pages/ControllersPage.jsx';
+import { FinancePage } from './pages/FinancePage.jsx';
 import { StorefrontEditPage } from './pages/StorefrontEditPage.jsx';
 import { StorefrontLogoPage } from './pages/StorefrontLogoPage.jsx';
 import { SocialsPage } from './pages/SocialsPage.jsx';
@@ -36,9 +38,7 @@ export default function App() {
       const hint = hasTelegramContext()
         ? 'Сессия Telegram не передана. Закройте Mini App и откройте снова через кнопку «Админка» в @taneesh_org_bot.'
         : 'Откройте через кнопку «Админка» в боте @taneesh_org_bot (не из браузера).';
-      setError(
-        `${hint}\n\nBotFather → /setdomain → taneesh-organizer-api.onrender.com`,
-      );
+      setError(`${hint}\n\nBotFather → /setdomain → taneesh-organizer-api.onrender.com`);
       setLoading(false);
       return;
     }
@@ -59,7 +59,6 @@ export default function App() {
     if (ready) load();
   }, [ready, load]);
 
-  // Каждый раз при открытии Mini App из Telegram — главный экран, не wizard.
   useEffect(() => {
     if (!tg?.onEvent) return undefined;
     const onVisible = (event) => {
@@ -78,12 +77,15 @@ export default function App() {
         pop();
       };
       tg.BackButton.onClick(handler);
-      return () => { tg.BackButton.offClick(handler); tg.BackButton.hide(); };
+      return () => {
+        tg.BackButton.offClick(handler);
+        tg.BackButton.hide();
+      };
     }
     tg.BackButton.hide();
   }, [depth, tg, pop]);
 
-  const findOrder = (id) => snapshot?.orders?.find(o => o.id === Number(id));
+  const findOrder = (id) => snapshot?.orders?.find((o) => o.id === Number(id));
 
   const renderScreen = () => {
     if (!snapshot) return null;
@@ -91,45 +93,35 @@ export default function App() {
     switch (id) {
       case SCREENS.HUB:
         return <HubPage snapshot={snapshot} push={push} />;
-      case SCREENS.DROPS:
       case SCREENS.EVENTS:
         return (
-          <DropsListPage
-            snapshot={snapshot}
-            onSnapshotChange={setSnapshot}
-            push={push}
-          />
+          <EventsListPage snapshot={snapshot} onSnapshotChange={setSnapshot} push={push} />
         );
-      case SCREENS.DROP:
       case SCREENS.EVENT:
         return (
-          <DropPage
+          <EventPage
             snapshot={snapshot}
             onSnapshotChange={setSnapshot}
-            dropId={params.dropId || params.eventId}
+            eventId={params.eventId}
           />
         );
-      case SCREENS.ORDERS:
+      case SCREENS.SALES:
         return <OrdersPage snapshot={snapshot} push={push} />;
-      case SCREENS.ORDER_DETAIL:
+      case SCREENS.SALE_DETAIL:
         return (
-          <OrderDetailPage
-            order={findOrder(params.orderId)}
-            onSnapshotChange={setSnapshot}
-          />
+          <OrderDetailPage order={findOrder(params.orderId)} onSnapshotChange={setSnapshot} />
         );
-      case SCREENS.WAITLIST:
       case SCREENS.AUDIENCE:
-        return <WaitlistPage snapshot={snapshot} />;
-      case SCREENS.STOREFRONT_EDIT:
+        return <AudiencePage snapshot={snapshot} />;
+      case SCREENS.CONTROLLERS:
+        return <ControllersPage snapshot={snapshot} />;
+      case SCREENS.FINANCE:
+        return <FinancePage snapshot={snapshot} />;
+      case SCREENS.PROFILE_EDIT:
         return (
-          <StorefrontEditPage
-            snapshot={snapshot}
-            onSnapshotChange={setSnapshot}
-            push={push}
-          />
+          <StorefrontEditPage snapshot={snapshot} onSnapshotChange={setSnapshot} push={push} />
         );
-      case SCREENS.STOREFRONT_LOGO:
+      case SCREENS.PROFILE_LOGO:
         return (
           <StorefrontLogoPage
             snapshot={snapshot}
@@ -139,38 +131,28 @@ export default function App() {
         );
       case SCREENS.SOCIALS:
         return <SocialsPage snapshot={snapshot} onSnapshotChange={setSnapshot} />;
-      case SCREENS.STORE_QR:
+      case SCREENS.ORG_QR:
         return <QrPage snapshot={snapshot} />;
       default:
         return <HubPage snapshot={snapshot} push={push} />;
     }
   };
 
-  if (loading) {
-    return (
-      <AppRoot appearance={appearance} platform={platform}>
-        <HubSkeleton hint={loadingHint} />
-      </AppRoot>
-    );
-  }
-
-  if (error) {
-    return (
-      <AppRoot appearance={appearance} platform={platform}>
-        <Placeholder header="Ошибка" description={error}>
-          <Button mode="filled" size="m" onClick={load}>Повторить</Button>
-        </Placeholder>
-      </AppRoot>
-    );
-  }
-
-  const isQr = current.id === SCREENS.STORE_QR;
+  const isQr = current.id === SCREENS.ORG_QR;
 
   return (
-    <AppRoot appearance={appearance} platform={platform}>
-      <div className={`fm-twa fm-scroll fm-scroll--hub${isQr ? ' fm-scroll--qr' : ''}${depth > 1 && !isQr ? ' fm-subpage' : ''}`}>
-        {renderScreen()}
-      </div>
+    <AppRoot appearance={appearance} platform={platform === 'ios' ? 'ios' : 'base'}>
+      {loading ? (
+        <HubSkeleton hint={loadingHint} />
+      ) : error ? (
+        <Placeholder header="Ошибка" description={error}>
+          <Button mode="filled" size="m" onClick={load}>
+            Повторить
+          </Button>
+        </Placeholder>
+      ) : (
+        <div className={isQr ? 'fm-qr-root' : undefined}>{renderScreen()}</div>
+      )}
     </AppRoot>
   );
 }

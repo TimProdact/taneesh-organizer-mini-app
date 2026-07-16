@@ -4,25 +4,18 @@ import { FieldSheet } from '../components/FieldSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow } from '../components/ValueRow.jsx';
 import { runActionSafe } from '../api.js';
-import { FIXED_SOCIAL_PLATFORMS, normalizeSocialLinks } from '../utils.js';
+import { FIXED_SOCIAL_PLATFORMS, normalizeSocialLinks, profileOf } from '../utils.js';
 import { SCREENS } from '../navigation/screens.js';
 
-const FIELDS = {
-  name: 'name',
-  bio: 'bio',
-};
+const FIELDS = { name: 'name', bio: 'bio' };
 
-function storefrontOf(snapshot) {
-  return snapshot.storefront || snapshot.brand || {};
-}
-
-function logoSummary(sf) {
-  if (sf.avatarUrl || sf.logoUrl) return 'Фото';
+function logoSummary(profile) {
+  if (profile.avatarUrl || profile.logoUrl) return 'Фото';
   return 'Не указано';
 }
 
 export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
-  const sf = useMemo(() => storefrontOf(snapshot), [snapshot]);
+  const profile = useMemo(() => profileOf(snapshot), [snapshot]);
   const socialCount = normalizeSocialLinks(snapshot.socialLinks).filter((l) => l.url?.trim()).length;
   const [sheet, setSheet] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -31,7 +24,7 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
     if (busy) return;
     setBusy(true);
     try {
-      const next = await runActionSafe('update_storefront', { storefront: patch });
+      const next = await runActionSafe('update_profile', { profile: patch });
       onSnapshotChange(next);
     } finally {
       setBusy(false);
@@ -48,29 +41,19 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
     }
   };
 
-  const avatarUrl = sf.avatarUrl || sf.logoUrl || '';
-  const displayName = sf.displayName || sf.name || '';
+  const avatarUrl = profile.avatarUrl || profile.logoUrl || '';
+  const displayName = profile.displayName || profile.name || '';
 
   return (
     <SubpageLayout>
       <PageHeader title="Профиль организатора" subtitle="Лого, описание, соцсети" />
       <div className="fm-page-body">
-        <div className="fm-storefront-hero">
-          <div className="fm-storefront-hero-preview" aria-hidden>
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="fm-storefront-hero-img" />
-            ) : (
-              <span className="fm-storefront-hero-empty">Нет фото</span>
-            )}
-          </div>
-        </div>
-
         <ValueGroup>
           <ValueRow
             label="Логотип"
-            value={logoSummary(sf)}
+            value={logoSummary(profile)}
             muted={!avatarUrl}
-            onClick={() => push(SCREENS.STOREFRONT_LOGO)}
+            onClick={() => push(SCREENS.PROFILE_LOGO)}
           />
           <ValueRow
             label="Название"
@@ -79,7 +62,7 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
           />
           <ValueRow
             label="Описание"
-            value={sf.bio?.trim() || '—'}
+            value={profile.bio?.trim() || '—'}
             onClick={() => setSheet(FIELDS.bio)}
           />
           <ValueRow
@@ -95,15 +78,15 @@ export function StorefrontEditPage({ snapshot, onSnapshotChange, push }) {
         open={sheet === FIELDS.name}
         title="Название"
         value={displayName}
-        placeholder="SILK REPAIR"
+        placeholder="Название организатора"
         onClose={() => setSheet(null)}
         onSave={handleSave}
       />
       <FieldSheet
         open={sheet === FIELDS.bio}
         title="Описание"
-        value={sf.bio || ''}
-        placeholder="Коротко о бренде и дропе"
+        value={profile.bio || ''}
+        placeholder="Коротко об организаторе"
         multiline
         onClose={() => setSheet(null)}
         onSave={handleSave}

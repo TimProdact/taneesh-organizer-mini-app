@@ -1,6 +1,6 @@
 import { Icon20Copy } from '@telegram-apps/telegram-ui/dist/icons/20/copy';
 import { copyText, haptic } from '../api.js';
-import { vitrinaShortUrl, vitrinaUrl } from '../utils.js';
+import { profileOf, publicPageHost, publicPageUrl } from '../utils.js';
 
 function ShareIcon() {
   return (
@@ -12,12 +12,11 @@ function ShareIcon() {
 }
 
 export function QrPage({ snapshot }) {
-  const storefront = snapshot.storefront || {};
-  const brand = snapshot.brand || {};
-  const displayName = storefront.displayName || brand.name || 'Taneesh Organizer';
-  const avatarUrl = storefront.avatarUrl || brand.logoUrl || '';
-  const logoEmoji = storefront.logoEmoji || brand.logoEmoji || '🎟️';
-  const url = vitrinaUrl();
+  const profile = profileOf(snapshot);
+  const displayName = profile.displayName || profile.name || 'Taneesh Organizer';
+  const avatarUrl = profile.avatarUrl || profile.logoUrl || '';
+  const logoEmoji = profile.logoEmoji || '🎟️';
+  const url = publicPageUrl();
   const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=12&data=${encodeURIComponent(url)}`;
 
   const handleCopy = () => {
@@ -34,41 +33,39 @@ export function QrPage({ snapshot }) {
         return;
       }
     } catch {
-      // fall through to copy
+      /* copy */
     }
     if (tg?.openLink) tg.openLink(url);
     else copyText(url);
   };
 
   return (
-    <main className="fm-twa fm-qr-page fm-qr-page--tiktok">
-      <div className="fm-qr-bg" aria-hidden />
-
-      <div className="fm-qr-stage">
-        <div className="fm-qr-avatar-wrap">
-          {avatarUrl ? (
-            <img src={avatarUrl} alt="" className="fm-qr-avatar" />
-          ) : (
-            <div className="fm-qr-avatar fm-qr-avatar--emoji">{logoEmoji}</div>
-          )}
+    <main className="fm-twa fm-qr-page">
+      <div className="fm-qr-card">
+        <div className="fm-qr-brand">
+          <div className="fm-qr-avatar" aria-hidden>
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" />
+            ) : (
+              <span>{logoEmoji}</span>
+            )}
+          </div>
+          <h1 className="fm-qr-title">{displayName}</h1>
+          <p className="fm-qr-handle">{publicPageHost()}</p>
         </div>
-
-        <div className="fm-qr-card">
-          <h2 className="fm-qr-name">{displayName}</h2>
-          <p className="fm-qr-handle">{vitrinaShortUrl()}</p>
+        <div className="fm-qr-frame">
           <img src={qrSrc} alt="QR страницы" className="fm-qr-image" width={240} height={240} />
         </div>
-      </div>
-
-      <div className="fm-qr-actions">
-        <button type="button" className="fm-qr-action" onClick={handleCopy}>
-          <Icon20Copy />
-          <span>Скопировать</span>
-        </button>
-        <button type="button" className="fm-qr-action" onClick={handleShare}>
-          <ShareIcon />
-          <span>Поделиться</span>
-        </button>
+        <div className="fm-qr-actions">
+          <button type="button" className="fm-qr-action" onClick={handleCopy}>
+            <Icon20Copy />
+            Копировать
+          </button>
+          <button type="button" className="fm-qr-action" onClick={handleShare}>
+            <ShareIcon />
+            Поделиться
+          </button>
+        </div>
       </div>
     </main>
   );

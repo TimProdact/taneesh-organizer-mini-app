@@ -3,22 +3,19 @@ import { Button } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { haptic, runActionSafe } from '../api.js';
-
-function storefrontOf(snapshot) {
-  return snapshot.storefront || snapshot.brand || {};
-}
+import { profileOf } from '../utils.js';
 
 export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
-  const sf = storefrontOf(snapshot);
+  const profile = profileOf(snapshot);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
-  const photoPreview = sf.avatarUrl || sf.logoUrl || '';
+  const photoPreview = profile.avatarUrl || profile.logoUrl || '';
 
   const save = async (patch) => {
     if (busy) return;
     setBusy(true);
     try {
-      const next = await runActionSafe('update_storefront', { storefront: patch });
+      const next = await runActionSafe('update_profile', { profile: patch });
       onSnapshotChange(next);
       haptic('success');
       onDone?.();
@@ -59,7 +56,7 @@ export function StorefrontLogoPage({ snapshot, onSnapshotChange, onDone }) {
       <FieldSheet
         open={sheet}
         title="Ссылка на фото"
-        value={sf.avatarUrl || ''}
+        value={profile.avatarUrl || ''}
         placeholder="https://..."
         onClose={() => setSheet(false)}
         onSave={saveUrl}

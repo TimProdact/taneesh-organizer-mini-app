@@ -3,8 +3,8 @@ import { Icon20Copy } from '@telegram-apps/telegram-ui/dist/icons/20/copy';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { copyText, haptic } from '../api.js';
 
-export function WaitlistPage({ snapshot }) {
-  const list = snapshot.audience || snapshot.waitlist || [];
+export function AudiencePage({ snapshot }) {
+  const list = snapshot.audience || [];
 
   const handleCopy = () => {
     haptic('light');
