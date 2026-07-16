@@ -1,9 +1,6 @@
 import { buildHubHeroCombos } from '../utils.js';
 
 export function HubHeroMeta({ snapshot }) {
-  const storefront = snapshot.storefront || {};
-  const brand = snapshot.brand || {};
-  const bio = (storefront.bio || brand.bio || '').trim();
   const { pills } = buildHubHeroCombos(snapshot);
 
   return (
@@ -20,7 +17,6 @@ export function HubHeroMeta({ snapshot }) {
           ))}
         </div>
       ) : null}
-      {bio ? <p className="fm-hub-bio">{bio}</p> : null}
     </div>
   );
 }
