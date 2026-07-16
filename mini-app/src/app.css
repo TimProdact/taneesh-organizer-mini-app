@@ -1,6 +1,7 @@
 html, body, #root {
   height: 100%;
   margin: 0;
+  position: relative;
 }
 
 .fm-scroll {
@@ -19,6 +20,30 @@ html, body, #root {
   min-height: 0;
   overflow: hidden;
   padding-bottom: 0;
+}
+
+/* QR screen: lock viewport, no page scroll */
+body:has(.fm-qr-root) {
+  overflow: hidden;
+  height: 100%;
+}
+
+#root:has(.fm-qr-root),
+#root:has(.fm-qr-root) > * {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.fm-qr-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  background: var(--fm-canvas-bg, var(--tg-theme-bg-color, #000));
 }
 
 .fm-subpage {
@@ -894,15 +919,16 @@ html, body, #root {
 
 .fm-qr-page {
   position: relative;
+  flex: 1 1 auto;
   height: 100%;
-  min-height: 0;
-  max-height: 100dvh;
+  min-height: 0 !important;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: calc(8px + env(safe-area-inset-top)) var(--fm-content-gutter) calc(12px + env(safe-area-inset-bottom));
+  padding: 12px var(--fm-content-gutter) calc(12px + env(safe-area-inset-bottom));
   overflow: hidden;
   box-sizing: border-box;
+  background: transparent;
 }
 
 .fm-qr-page--tiktok {
@@ -947,6 +973,18 @@ html, body, #root {
   flex-shrink: 0;
 }
 
+.fm-qr-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 0;
+  text-align: center;
+}
+
 .fm-qr-avatar {
   width: 72px;
   height: 72px;
@@ -955,29 +993,15 @@ html, body, #root {
   border: 4px solid #fff;
   background: #1a1a1a;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
-
-.fm-qr-avatar--emoji {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 2.25rem;
-}
-
-.fm-qr-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  max-width: 100%;
-}
-
-.fm-qr-avatar {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.fm-qr-avatar--emoji {
+  font-size: 2.25rem;
 }
 
 .fm-qr-avatar img {
@@ -989,23 +1013,26 @@ html, body, #root {
 
 .fm-qr-frame {
   display: flex;
+  align-items: center;
   justify-content: center;
   width: 100%;
   min-height: 0;
+  flex: 0 1 auto;
+  max-height: min(280px, 46%);
 }
 
 .fm-qr-card {
   width: 100%;
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-height: 0;
   background: #fff;
   border-radius: 24px;
-  padding: 28px 20px;
+  padding: 24px 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
   color: #111;
   box-sizing: border-box;
@@ -1018,24 +1045,26 @@ html, body, #root {
   font-weight: 700;
   line-height: 1.2;
   text-align: center;
+  color: #111;
 }
 
 .fm-qr-handle {
-  margin: 0 0 4px;
+  margin: 0;
   font-size: 0.875rem;
   font-weight: 500;
   color: #8e8e93;
   text-align: center;
+  word-break: break-all;
 }
 
 .fm-qr-image {
   display: block;
-  width: min(100%, 280px, 68vw, 42vh);
+  width: auto;
   height: auto;
+  max-width: min(100%, 280px);
+  max-height: 100%;
   aspect-ratio: 1;
   border-radius: 4px;
-  flex-shrink: 1;
-  min-height: 0;
   object-fit: contain;
 }
 
@@ -1045,7 +1074,7 @@ html, body, #root {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 0 0 auto;
   width: 100%;
 }
 
