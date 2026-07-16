@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Button, IconButton, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
-import { ValueRow, SwitchRow } from '../components/ValueRow.jsx';
+import { ValueRow } from '../components/ValueRow.jsx';
 import { MenuGroup, MenuRow } from '../components/MenuRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
@@ -174,26 +174,6 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           {metrics.map((row) => (
             <ValueRow key={row.label} label={row.label} value={row.value} muted />
           ))}
-        </ValueGroup>
-
-        <ValueGroup header="Управление">
-          <SwitchRow
-            label="Активировать"
-            checked={!event.paused}
-            onChange={(active) => act('set_paused', { paused: !active })}
-          />
-          <SwitchRow
-            label="Скрыть"
-            checked={event.visible === false}
-            onChange={(hidden) => act('set_event_visible', { visible: !hidden })}
-          />
-          {event.status === 'draft' ? (
-            <ValueRow
-              label="Публикация"
-              value="Опубликовать"
-              onClick={() => act('publish_event')}
-            />
-          ) : null}
         </ValueGroup>
 
         <MenuGroup header="Разделы">
