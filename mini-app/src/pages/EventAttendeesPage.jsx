@@ -8,6 +8,7 @@ import {
   SegmentedControl,
 } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { EntityListRow } from '../components/EntityListRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
@@ -131,7 +132,7 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
       ];
 
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta>
       <PageHeader
         title="Участники"
         subtitle={`${filtered.length} из ${list.length} · ${event.name || ''}`}
@@ -176,21 +177,21 @@ export function EventAttendeesPage({ snapshot, onSnapshotChange, eventId }) {
             description="Пока нет участников по этому фильтру"
           />
         )}
-
-        <div className="fm-page-cta fm-page-cta--separated">
-          <Button
-            mode="filled"
-            size="l"
-            stretched
-            onClick={() => {
-              haptic('selection');
-              setInviteOpen(true);
-            }}
-          >
-            Пригласить
-          </Button>
-        </div>
       </List>
+
+      <StickyPageCta>
+        <Button
+          mode="filled"
+          size="l"
+          stretched
+          onClick={() => {
+            haptic('selection');
+            setInviteOpen(true);
+          }}
+        >
+          Пригласить
+        </Button>
+      </StickyPageCta>
 
       <BottomSheet
         open={inviteOpen}

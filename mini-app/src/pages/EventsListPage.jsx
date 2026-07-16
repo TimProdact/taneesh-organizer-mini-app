@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, List, Placeholder, Section, SegmentedControl, Cell, Navigation } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { CreateEventSheet } from '../components/CreateEventSheet.jsx';
 import { eventEntryLabel, formatEventDate, phaseLabel } from '../utils.js';
 import { haptic } from '../api.js';
@@ -53,7 +54,7 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
   );
 
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta>
       <PageHeader
         title="Мероприятия"
         subtitle={filter === 'archive' ? `${filtered.length} в архиве` : `${activeCount} активных`}
@@ -113,13 +114,14 @@ export function EventsListPage({ snapshot, onSnapshotChange, push }) {
             }
           />
         )}
-
-        <div className="fm-page-cta fm-page-cta--separated">
-          <Button mode="filled" size="l" stretched onClick={() => setCreateOpen(true)}>
-            + Создать мероприятие
-          </Button>
-        </div>
       </List>
+
+      <StickyPageCta>
+        <Button mode="filled" size="l" stretched onClick={() => setCreateOpen(true)}>
+          + Создать мероприятие
+        </Button>
+      </StickyPageCta>
+
       <CreateEventSheet
         open={createOpen}
         snapshot={snapshot}

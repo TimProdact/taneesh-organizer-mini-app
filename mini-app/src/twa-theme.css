@@ -342,6 +342,12 @@ html[data-tgui-platform='android'] body {
   box-sizing: border-box;
 }
 
+/* Space for StickyPageCta so last list rows stay visible above the bar */
+.fm-subpage-inset--sticky-cta,
+.fm-hub--sticky-cta {
+  padding-bottom: calc(112px + env(safe-area-inset-bottom));
+}
+
 .fm-inset-section-stack {
   display: flex;
   flex-direction: column;

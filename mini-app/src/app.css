@@ -1466,6 +1466,34 @@ button.fm-value-row {
   padding: 0;
 }
 
+/* Page-level primary CTA — fixed to viewport bottom; content scrolls behind */
+.fm-sticky-cta {
+  z-index: 40;
+  box-sizing: border-box;
+  /* Horizontal gutter matches SubpageLayout; FixedLayout already adds safe-area bottom */
+  padding: 12px var(--fm-content-gutter) 12px;
+  background: linear-gradient(
+    to top,
+    var(--tg-theme-bg-color, #000) 55%,
+    color-mix(in srgb, var(--tg-theme-bg-color, #000) 85%, transparent) 85%,
+    transparent
+  );
+  pointer-events: none;
+}
+
+.fm-sticky-cta-inner {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fm-sticky-cta .fm-hub-footer {
+  padding: 12px 0 0;
+}
+
 .fm-event-thumb {
   width: 40px;
   height: 40px;

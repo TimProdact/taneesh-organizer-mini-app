@@ -10,6 +10,12 @@ export function PageHeader({ title, subtitle, trailing }) {
   );
 }
 
-export function SubpageLayout({ children }) {
-  return <div className="fm-twa fm-subpage-inset">{children}</div>;
+export function SubpageLayout({ children, stickyCta = false }) {
+  return (
+    <div
+      className={`fm-twa fm-subpage-inset${stickyCta ? ' fm-subpage-inset--sticky-cta' : ''}`}
+    >
+      {children}
+    </div>
+  );
 }

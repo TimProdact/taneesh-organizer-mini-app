@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow } from '../components/ValueRow.jsx';
@@ -33,6 +34,7 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
 
   const canShip = order.status === 'pending' || order.status === 'paid';
   const canCancel = ['pending', 'paid', 'shipped'].includes(order.status);
+  const showCta = canShip || canCancel;
 
   const saveShipment = async (raw) => {
     const deliveryUrl = raw.trim();
@@ -46,7 +48,7 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
   };
 
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta={showCta}>
       <PageHeader title="Заказ" subtitle={date} />
       <List className="fm-page-list">
         <ValueGroup>
@@ -79,35 +81,35 @@ export function OrderDetailPage({ order, onSnapshotChange }) {
             <ValueRow label="Возврат" value={order.refundId} />
           </ValueGroup>
         ) : null}
-
-        {(canShip || canCancel) ? (
-          <div className="fm-page-cta fm-page-cta--stack">
-            {canShip ? (
-              <Button
-                mode="filled"
-                size="l"
-                stretched
-                disabled={busy}
-                onClick={() => setShipSheet(true)}
-              >
-                Подтвердить отправку
-              </Button>
-            ) : null}
-            {canCancel ? (
-              <Button
-                mode="plain"
-                size="l"
-                stretched
-                className="fm-btn-destructive"
-                disabled={busy}
-                onClick={cancelOrder}
-              >
-                Отменить заказ и вернуть деньги
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
       </List>
+
+      {showCta ? (
+        <StickyPageCta>
+          {canShip ? (
+            <Button
+              mode="filled"
+              size="l"
+              stretched
+              disabled={busy}
+              onClick={() => setShipSheet(true)}
+            >
+              Подтвердить отправку
+            </Button>
+          ) : null}
+          {canCancel ? (
+            <Button
+              mode="plain"
+              size="l"
+              stretched
+              className="fm-btn-destructive"
+              disabled={busy}
+              onClick={cancelOrder}
+            >
+              Отменить заказ и вернуть деньги
+            </Button>
+          ) : null}
+        </StickyPageCta>
+      ) : null}
 
       <FieldSheet
         open={shipSheet}

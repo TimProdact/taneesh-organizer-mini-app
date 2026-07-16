@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Button, IconButton, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow } from '../components/ValueRow.jsx';
 import { MenuGroup, MenuRow } from '../components/MenuRow.jsx';
@@ -88,7 +89,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
   };
 
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta>
       <PageHeader
         title={event.name || 'Мероприятие'}
         subtitle={status}
@@ -196,13 +197,13 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
             onClick={() => { haptic('selection'); setShareOpen(true); }}
           />
         </MenuGroup>
-
-        <div className="fm-page-cta fm-page-cta--separated">
-          <Button mode="filled" size="l" stretched onClick={openPublic}>
-            {previewLabel}
-          </Button>
-        </div>
       </List>
+
+      <StickyPageCta>
+        <Button mode="filled" size="l" stretched onClick={openPublic}>
+          {previewLabel}
+        </Button>
+      </StickyPageCta>
 
       <BottomSheet open={menuOpen} title="Действия" onClose={() => setMenuOpen(false)}>
         <div className="fm-action-list">

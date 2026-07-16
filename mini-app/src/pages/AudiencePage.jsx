@@ -11,6 +11,7 @@ import {
 } from '@telegram-apps/telegram-ui';
 import { Icon20Copy } from '@telegram-apps/telegram-ui/dist/icons/20/copy';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { formatPrice } from '../utils.js';
 import { copyText, haptic } from '../api.js';
 
@@ -44,8 +45,10 @@ export function AudiencePage({ snapshot }) {
     );
   };
 
+  const showCta = list.length > 0;
+
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta={showCta}>
       <PageHeader title="Аудитория (CRM)" subtitle={`${list.length} клиентов`} />
       <List className="fm-page-list">
         <Input
@@ -86,16 +89,16 @@ export function AudiencePage({ snapshot }) {
             description="Клиенты появятся после продаж и заявок на события"
           />
         )}
-
-        {list.length > 0 ? (
-          <div className="fm-page-cta fm-page-cta--separated">
-            <Button mode="filled" size="l" stretched onClick={handleCopy}>
-              <Icon20Copy />
-              Скопировать все
-            </Button>
-          </div>
-        ) : null}
       </List>
+
+      {showCta ? (
+        <StickyPageCta>
+          <Button mode="filled" size="l" stretched onClick={handleCopy}>
+            <Icon20Copy />
+            Скопировать все
+          </Button>
+        </StickyPageCta>
+      ) : null}
     </SubpageLayout>
   );
 }

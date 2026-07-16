@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { Button, List } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
 
@@ -89,8 +90,10 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
     setUrlSheet(false);
   };
 
+  const showCta = photos.length < MAX || dirty;
+
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta={showCta}>
       <PageHeader
         title="Фото"
         subtitle={photosSummary(photos.length)}
@@ -133,8 +136,10 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
             e.target.value = '';
           }}
         />
+      </List>
 
-        <div className="fm-page-cta fm-page-cta--stack">
+      {showCta ? (
+        <StickyPageCta>
           {photos.length < MAX ? (
             <Button
               mode="outline"
@@ -157,8 +162,8 @@ export function EventPhotosPage({ snapshot, onSnapshotChange, eventId }) {
               Сохранить
             </Button>
           ) : null}
-        </div>
-      </List>
+        </StickyPageCta>
+      ) : null}
 
       <FieldSheet
         open={urlSheet}

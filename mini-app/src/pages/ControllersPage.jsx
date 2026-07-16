@@ -8,6 +8,7 @@ import {
   Section,
 } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
+import { StickyPageCta } from '../components/StickyPageCta.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { AddControllerSheet } from '../components/AddControllerSheet.jsx';
 import { ValueGroup } from '../components/ValueGroup.jsx';
@@ -71,7 +72,7 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
   };
 
   return (
-    <SubpageLayout>
+    <SubpageLayout stickyCta>
       <PageHeader title="Контролеры" subtitle={`${list.length} из ${MAX}`} />
       <List className="fm-page-list">
         {list.length > 0 ? (
@@ -98,19 +99,19 @@ export function ControllersPage({ snapshot, onSnapshotChange }) {
             description="Добавляй по имени и телефону (+998) — до 5 человек"
           />
         )}
-
-        <div className="fm-page-cta fm-page-cta--separated">
-          <Button
-            mode="filled"
-            size="l"
-            stretched
-            disabled={list.length >= MAX}
-            onClick={openAdd}
-          >
-            + Добавить
-          </Button>
-        </div>
       </List>
+
+      <StickyPageCta>
+        <Button
+          mode="filled"
+          size="l"
+          stretched
+          disabled={list.length >= MAX}
+          onClick={openAdd}
+        >
+          + Добавить
+        </Button>
+      </StickyPageCta>
 
       <AddControllerSheet
         open={addOpen}
