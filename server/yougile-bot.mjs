@@ -294,6 +294,28 @@ async function reply(chatId, text, extra = {}) {
   }
 }
 
+/** Удаляет сообщение с кнопками черновика; если нельзя — хотя бы снимает клавиатуру. */
+async function dismissCallbackMessage(cq) {
+  const chatId = cq.message?.chat?.id;
+  const messageId = cq.message?.message_id;
+  if (chatId == null || messageId == null) return;
+  try {
+    await tg('deleteMessage', { chat_id: chatId, message_id: messageId });
+    return;
+  } catch (e) {
+    console.error('deleteMessage', e.message);
+  }
+  try {
+    await tg('editMessageReplyMarkup', {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: { inline_keyboard: [] },
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
 function splitChatIds(raw) {
   return String(raw || '')
     .split(/[,;\s]+/)
@@ -1405,6 +1427,7 @@ async function handleCallbackQuery(cq) {
 
   if (data === CB_CANCEL) {
     sessions.delete(chatId);
+    await dismissCallbackMessage(cq);
     await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
     return;
   }
@@ -1412,6 +1435,7 @@ async function handleCallbackQuery(cq) {
   if (data === CB_EDIT) {
     const draft = session?.draft;
     sessions.set(chatId, { step: 'edit', draft });
+    await dismissCallbackMessage(cq);
     await reply(
       chatId,
       'Пришли <b>новый текст или голосовое</b> — пересоберу структуру.\n\n' + STRUCTURE_GUIDE,
@@ -1421,17 +1445,25 @@ async function handleCallbackQuery(cq) {
   }
 
   if (data === CB_CREATE) {
-    if (!session?.draft) {
-      await reply(chatId, 'Черновик потерялся. Пришли текст/войсик ещё раз.', {
-        reply_markup: mainKeyboard(),
-      });
+    // Сразу забираем черновик и снимаем кнопки — повторный клик не создаст дубль
+    const draft = session?.draft;
+    if (!draft || session?.step === 'creating') {
+      await dismissCallbackMessage(cq);
+      if (!draft) {
+        await reply(chatId, 'Черновик потерялся. Пришли текст/войсик ещё раз.', {
+          reply_markup: mainKeyboard(),
+        });
+      }
       return;
     }
+    sessions.set(chatId, { step: 'creating' });
+    await dismissCallbackMessage(cq);
     try {
       await reply(chatId, '⏳ Создаю в Sandbox…');
-      await createFromDraft(chatId, session.draft);
+      await createFromDraft(chatId, draft);
     } catch (e) {
       console.error(e);
+      sessions.delete(chatId);
       await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
         reply_markup: mainKeyboard(),
       });
