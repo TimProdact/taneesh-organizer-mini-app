@@ -5,9 +5,10 @@
  * Env:
  *   YOUGILE_API_KEY, YOUGILE_COMPANY_ID, YOUGILE_PROJECT_ID
  *   YOUGILE_TELEGRAM_BOT_TOKEN
- *   YOUGILE_TELEGRAM_CHAT_ID   — основная группа (можно несколько через запятую)
- *   OPENAI_API_KEY             — Whisper для голосовых (опционально; иначе local whisper)
- *   YOUGILE_NOTIFY_THREAD_ID   — topic id, если группа-форум
+ *   YOUGILE_TELEGRAM_CHAT_ID          — группа: только новые задачи
+ *   YOUGILE_TELEGRAM_CHAT_ID_PRIVATE  — личка: переносы / удаления / прочее
+ *   OPENAI_API_KEY                    — Whisper для голосовых (опционально; иначе local whisper)
+ *   YOUGILE_NOTIFY_THREAD_ID          — topic id, если группа-форум (только для group)
  */
 import {
   readFileSync,
@@ -143,14 +144,6 @@ function cancelKeyboard() {
   };
 }
 
-function notifyChatIds() {
-  const raw = env('YOUGILE_TELEGRAM_CHAT_ID');
-  return raw
-    .split(/[,;\s]+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
 async function reply(chatId, text, extra = {}) {
   const payload = {
     chat_id: chatId,
@@ -162,26 +155,48 @@ async function reply(chatId, text, extra = {}) {
   try {
     return await tg('sendMessage', payload);
   } catch (e) {
-    // HTML мог сломаться — шлём plain
     console.error('reply HTML failed, plain fallback', e.message);
     const { parse_mode: _p, ...rest } = payload;
     return tg('sendMessage', { ...rest, text: htmlToText(text) });
   }
 }
 
+function splitChatIds(raw) {
+  return String(raw || '')
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Группа — только «Создание». */
+function groupChatIds() {
+  return splitChatIds(env('YOUGILE_TELEGRAM_CHAT_ID'));
+}
+
+/** Личка — переносы, удаления и всё кроме новых задач. */
+function privateChatIds() {
+  const explicit = splitChatIds(env('YOUGILE_TELEGRAM_CHAT_ID_PRIVATE'));
+  if (explicit.length) return explicit;
+  // fallback: первый organizer id
+  return splitChatIds(env('TELEGRAM_ORGANIZER_IDS')).slice(0, 1);
+}
+
 /**
- * Always try to deliver to every configured group chat.
- * Retries + plain-text fallback. Returns { ok, sent, errors }.
+ * @param {'group'|'dm'} channel
+ * group → только новые задачи; dm → перенос/удаление/прочее
  */
-async function notifyGroup(html, { alsoChatId } = {}) {
-  const ids = new Set(notifyChatIds());
+async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
+  const ids = new Set(channel === 'dm' ? privateChatIds() : groupChatIds());
   if (alsoChatId != null) ids.add(String(alsoChatId));
   if (!ids.size) {
-    console.error('notifyGroup: no YOUGILE_TELEGRAM_CHAT_ID');
+    console.error(
+      `notifyTelegram(${channel}): no chat id — set YOUGILE_TELEGRAM_CHAT_ID` +
+        (channel === 'dm' ? '_PRIVATE' : ''),
+    );
     return { ok: false, sent: 0, errors: ['no chat id'] };
   }
 
-  const threadId = env('YOUGILE_NOTIFY_THREAD_ID');
+  const threadId = channel === 'group' ? env('YOUGILE_NOTIFY_THREAD_ID') : '';
   const plain = htmlToText(html);
   let sent = 0;
   const errors = [];
@@ -212,7 +227,11 @@ async function notifyGroup(html, { alsoChatId } = {}) {
           delivered = true;
           sent += 1;
         } catch (e2) {
-          console.error(`notifyGroup chat=${chatId} attempt=${attempt}`, e1.message, e2.message);
+          console.error(
+            `notifyTelegram(${channel}) chat=${chatId} attempt=${attempt}`,
+            e1.message,
+            e2.message,
+          );
           if (attempt === 3) errors.push(`${chatId}: ${e2.message}`);
           await new Promise((r) => setTimeout(r, 400 * attempt));
         }
@@ -220,9 +239,18 @@ async function notifyGroup(html, { alsoChatId } = {}) {
     }
   }
 
-  if (!sent) console.error('notifyGroup FAILED', errors);
-  else console.log('notifyGroup sent', sent, 'chats', [...ids].join(','));
+  if (!sent) console.error(`notifyTelegram(${channel}) FAILED`, errors);
+  else console.log(`notifyTelegram(${channel}) sent`, sent, 'chats', [...ids].join(','));
   return { ok: sent > 0, sent, errors };
+}
+
+/** @deprecated alias — новые задачи в группу */
+async function notifyGroup(html, opts = {}) {
+  return notifyTelegram(html, { ...opts, channel: 'group' });
+}
+
+async function notifyDm(html, opts = {}) {
+  return notifyTelegram(html, { ...opts, channel: 'dm' });
 }
 
 async function fetchBoards() {
@@ -765,7 +793,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
         old.board !== info.board
           ? `${old.board}/${old.column || '?'} → ${info.board}/${info.column}`
           : `${old.column || '?'} → ${info.column}`;
-      const n = await notifyGroup(
+      const n = await notifyDm(
         formatActionNotify({
           action: 'Перенос',
           title: info.title,
@@ -782,7 +810,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
   if (!quietNew) {
     for (const [tid, old] of Object.entries(prev)) {
       if (snap[tid]) continue;
-      const n = await notifyGroup(
+      const n = await notifyDm(
         formatActionNotify({
           action: 'Удаление',
           title: old.title || 'без названия',
