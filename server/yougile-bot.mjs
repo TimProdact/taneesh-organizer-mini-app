@@ -315,20 +315,35 @@ function saveEphemeralStore(data) {
   }
 }
 
-function trackEphemeral(chatId, msgOrId) {
+/** @returns {{ bot: number[], user: number[] }} */
+function normalizeBucket(v) {
+  if (!v) return { bot: [], user: [] };
+  if (Array.isArray(v)) return { bot: v, user: [] };
+  return {
+    bot: Array.isArray(v.bot) ? v.bot : [],
+    user: Array.isArray(v.user) ? v.user : [],
+  };
+}
+
+function trackEphemeral(chatId, msgOrId, kind = 'bot') {
   const id = typeof msgOrId === 'number' ? msgOrId : msgOrId?.message_id;
   if (chatId == null || id == null) return;
   const key = chatKey(chatId);
   const store = loadEphemeralStore();
-  const list = Array.isArray(store[key]) ? store[key] : [];
+  const bucket = normalizeBucket(store[key]);
+  const list = kind === 'user' ? bucket.user : bucket.bot;
   if (!list.includes(id)) list.push(id);
-  store[key] = list;
+  store[key] = bucket;
   saveEphemeralStore(store);
+}
+
+function trackUserMessage(chatId, msgOrId) {
+  trackEphemeral(chatId, msgOrId, 'user');
 }
 
 async function replyEphemeral(chatId, text, extra = {}) {
   const msg = await reply(chatId, text, extra);
-  trackEphemeral(chatId, msg);
+  trackEphemeral(chatId, msg, 'bot');
   return msg;
 }
 
@@ -341,19 +356,26 @@ async function deleteTgMessage(chatId, messageId) {
   }
 }
 
-/** Удаляет все промежуточные сообщения бота в этом чате (память + диск). */
-async function purgeEphemeral(chatId, { keepIds = [] } = {}) {
+/**
+ * Чистит сообщения бота. С includeUser — ещё и сообщения пользователя
+ * (войс, «Новая задача», текст) — в личке Bot API это разрешено.
+ */
+async function purgeEphemeral(chatId, { keepIds = [], includeUser = false } = {}) {
   const key = chatKey(chatId);
   const store = loadEphemeralStore();
-  const list = Array.isArray(store[key]) ? store[key] : [];
+  const bucket = normalizeBucket(store[key]);
   const keep = new Set(keepIds);
-  const toDelete = list.filter((id) => !keep.has(id));
-  const toKeep = list.filter((id) => keep.has(id));
-  if (toKeep.length) store[key] = toKeep;
-  else delete store[key];
+
+  const botDelete = bucket.bot.filter((id) => !keep.has(id));
+  const botKeep = bucket.bot.filter((id) => keep.has(id));
+  const userDelete = includeUser ? bucket.user.filter((id) => !keep.has(id)) : [];
+  const userKeep = includeUser ? bucket.user.filter((id) => keep.has(id)) : bucket.user;
+
+  if (!botKeep.length && !userKeep.length) delete store[key];
+  else store[key] = { bot: botKeep, user: userKeep };
   saveEphemeralStore(store);
-  // последовательно — меньше flood-лимитов Telegram
-  for (const id of toDelete) {
+
+  for (const id of [...botDelete, ...userDelete]) {
     await deleteTgMessage(chatId, id);
   }
 }
@@ -1035,7 +1057,7 @@ async function handleStart(chatId) {
 }
 
 async function beginCapture(chatId) {
-  await purgeEphemeral(chatId);
+  await purgeEphemeral(chatId, { includeUser: true });
   sessions.set(chatId, { step: 'await_input' });
   await replyEphemeral(
     chatId,
@@ -1127,7 +1149,16 @@ async function createFromDraft(chatId, draft) {
     [PRIORITY_STICKER_ID]: PRIORITY_STATES[priority].id,
   };
 
-  const title = String(ready.title || '').trim() || 'Без названия';
+  const titleRaw = String(ready.title || '').trim();
+  const title =
+    titleRaw && titleRaw !== '—'
+      ? titleRaw
+      : String(ready.raw || '')
+          .trim()
+          .split(/[.!?\n]/u)[0]
+          .trim()
+          .slice(0, 120) || 'Без названия';
+  ready.title = title;
   const task = await createYougileTask({
     title: title.slice(0, 200),
     descriptionHtml: descHtml,
@@ -1155,7 +1186,7 @@ async function createFromDraft(chatId, draft) {
     ? 'В группу отправил'
     : `Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
 
-  await purgeEphemeral(chatId);
+  await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
 
   await reply(
@@ -1531,20 +1562,20 @@ async function handleVoice(chatId, msg) {
     await reply(chatId, 'Не нашёл аудио в сообщении.', { reply_markup: mainKeyboard() });
     return;
   }
+  trackUserMessage(chatId, msg.message_id);
   await replyEphemeral(chatId, '🎤 Слушаю и расшифровываю…');
   let local;
   try {
     local = await downloadTelegramFile(voice.file_id);
     const transcript = await transcribeVoiceFile(local);
     if (!transcript) throw new Error('Пустая расшифровка');
-    // Расшифровку не показываем отдельно — она уйдёт в черновик, потом всё почистим
     await ingestRawInput(chatId, transcript, {
       source: 'Telegram · голосовое',
       from: msg.from,
     });
   } catch (e) {
     console.error('voice', e);
-    await purgeEphemeral(chatId);
+    await purgeEphemeral(chatId, { includeUser: true });
     await reply(chatId, `Не смог обработать голосовое: ${escapeHtml(e.message)}`, {
       reply_markup: mainKeyboard(),
     });
@@ -1589,7 +1620,7 @@ async function handleCallbackQuery(cq) {
 
   if (data === CB_CANCEL) {
     await dismissCallbackMessage(cq);
-    await purgeEphemeral(chatId);
+    await purgeEphemeral(chatId, { includeUser: true });
     sessions.delete(chatId);
     await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
     return;
@@ -1604,7 +1635,7 @@ async function handleCallbackQuery(cq) {
     }
     if (!draft) {
       await dismissCallbackMessage(cq);
-      await purgeEphemeral(chatId);
+      await purgeEphemeral(chatId, { includeUser: true });
       sessions.delete(chatId);
       return;
     }
@@ -1617,7 +1648,7 @@ async function handleCallbackQuery(cq) {
       await createFromDraft(chatId, draft);
     } catch (e) {
       console.error(e);
-      await purgeEphemeral(chatId);
+      await purgeEphemeral(chatId, { includeUser: true });
       sessions.delete(chatId);
       await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
         reply_markup: mainKeyboard(),
@@ -1665,7 +1696,8 @@ export async function handleYougileUpdate(update) {
   if (!text) return { ok: true, ignored: true };
 
   if (text === BTN_CANCEL || text === '/cancel') {
-    await purgeEphemeral(chatId);
+    trackUserMessage(chatId, msg.message_id);
+    await purgeEphemeral(chatId, { includeUser: true });
     sessions.delete(chatId);
     await reply(chatId, 'Ок, отменил.', { reply_markup: mainKeyboard() });
     return { ok: true };
@@ -1679,12 +1711,14 @@ export async function handleYougileUpdate(update) {
 
   if (text === BTN_NEW || text === '/new') {
     await beginCapture(chatId);
+    trackUserMessage(chatId, msg.message_id);
     return { ok: true };
   }
 
   // Редактирование черновика или любой входящий текст → структура → превью
   if (session?.step === 'edit' || session?.step === 'await_input' || session?.step === 'preview') {
     try {
+      trackUserMessage(chatId, msg.message_id);
       await ingestRawInput(chatId, text, {
         source: session?.draft?.source || 'Telegram',
         from,
@@ -1700,6 +1734,7 @@ export async function handleYougileUpdate(update) {
 
   if (!text.startsWith('/')) {
     try {
+      trackUserMessage(chatId, msg.message_id);
       await ingestRawInput(chatId, text, { source: 'Telegram', from });
     } catch (e) {
       console.error(e);
