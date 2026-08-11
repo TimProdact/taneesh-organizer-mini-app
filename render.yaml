@@ -37,5 +37,7 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      - key: YOUGILE_BOT_ALLOW
+        sync: false
       - key: YOUGILE_NOTIFY_THREAD_ID
         sync: false
