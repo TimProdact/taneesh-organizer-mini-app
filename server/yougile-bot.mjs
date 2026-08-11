@@ -1460,15 +1460,19 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
   return sent;
 }
 
-async function runSyncOnce(chatId) {
-  await reply(chatId, '🔄 Проверяю YouGile…');
+async function runSyncOnce(chatId, userMsgId = null) {
+  if (userMsgId != null) trackUserMessage(chatId, userMsgId);
+  await replyEphemeral(chatId, '🔄 Проверяю YouGile…');
   try {
     const n = await syncYougileOnce({ quietNew: false });
-    await reply(chatId, `Готово. Отправлено уведомлений: <b>${n}</b>`, {
+    // «Готово» только статус — удалим вместе с «Проверяю»; уведомления (Удаление и т.п.) остаются
+    await replyEphemeral(chatId, `Готово. Отправлено уведомлений: <b>${n}</b>`, {
       reply_markup: mainKeyboard(),
     });
+    await purgeEphemeral(chatId, { includeUser: true });
   } catch (e) {
     console.error(e);
+    await purgeEphemeral(chatId, { includeUser: true });
     await reply(chatId, `Ошибка синка: ${escapeHtml(e.message)}`, {
       reply_markup: mainKeyboard(),
     });
@@ -1811,7 +1815,7 @@ export async function handleYougileUpdate(update) {
 
   // /start team|... 
   if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text) || text === '/help') {
-    await handleStart(chatId);
+    await handleStart(chatId, msg.message_id);
     return { ok: true };
   }
 
@@ -1832,7 +1836,7 @@ export async function handleYougileUpdate(update) {
 
   if (text === BTN_SYNC || text === '/sync') {
     sessions.delete(chatId);
-    await runSyncOnce(chatId);
+    await runSyncOnce(chatId, msg.message_id);
     return { ok: true };
   }
 
