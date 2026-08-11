@@ -1755,7 +1755,8 @@ async function handleCallbackQuery(cq) {
     await dismissCallbackMessage(cq);
     await purgeEphemeral(chatId, { includeUser: true });
     sessions.delete(chatId);
-    await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
+    const ack = await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
+    if (ack?.message_id != null) await deleteTgMessage(chatId, ack.message_id);
     return;
   }
 
@@ -1832,7 +1833,8 @@ export async function handleYougileUpdate(update) {
     trackUserMessage(chatId, msg.message_id);
     await purgeEphemeral(chatId, { includeUser: true });
     sessions.delete(chatId);
-    await reply(chatId, 'Ок, отменил.', { reply_markup: mainKeyboard() });
+    const ack = await reply(chatId, 'Ок, отменил.', { reply_markup: mainKeyboard() });
+    if (ack?.message_id != null) await deleteTgMessage(chatId, ack.message_id);
     return { ok: true };
   }
 
