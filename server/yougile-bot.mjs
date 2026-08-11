@@ -95,6 +95,7 @@ const TEAM_OPERATORS = [
 ];
 
 const USERS_PATH = join(ROOT, '.yougile-bot-users.json');
+const EPHEMERAL_PATH = join(ROOT, '.yougile-bot-ephemeral.json');
 
 /** Стикер «Приоритет» в YouGile */
 const PRIORITY_STICKER_ID = 'e7d00330-5995-48f8-9ba9-3c90c4b22742';
@@ -125,10 +126,6 @@ const PRIORITY_STATES = {
 
 /** @type {Map<number, { step: string, title?: string, draft?: TaskDraft }>} */
 const sessions = new Map();
-
-/** Сообщения бота, которые чистим после создания / отмены (не трогаем финальный ✅). */
-/** @type {Map<number, number[]>} */
-const ephemeralMsgs = new Map();
 
 function env(name, fallback = '') {
   return (process.env[name] || fallback).trim();
@@ -298,12 +295,36 @@ async function reply(chatId, text, extra = {}) {
   }
 }
 
+function chatKey(chatId) {
+  return String(chatId);
+}
+
+function loadEphemeralStore() {
+  try {
+    if (existsSync(EPHEMERAL_PATH)) return JSON.parse(readFileSync(EPHEMERAL_PATH, 'utf8'));
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+function saveEphemeralStore(data) {
+  try {
+    writeFileSync(EPHEMERAL_PATH, `${JSON.stringify(data)}\n`);
+  } catch (e) {
+    console.error('ephemeral save', e.message);
+  }
+}
+
 function trackEphemeral(chatId, msgOrId) {
   const id = typeof msgOrId === 'number' ? msgOrId : msgOrId?.message_id;
   if (chatId == null || id == null) return;
-  const list = ephemeralMsgs.get(chatId) || [];
-  list.push(id);
-  ephemeralMsgs.set(chatId, list);
+  const key = chatKey(chatId);
+  const store = loadEphemeralStore();
+  const list = Array.isArray(store[key]) ? store[key] : [];
+  if (!list.includes(id)) list.push(id);
+  store[key] = list;
+  saveEphemeralStore(store);
 }
 
 async function replyEphemeral(chatId, text, extra = {}) {
@@ -321,11 +342,21 @@ async function deleteTgMessage(chatId, messageId) {
   }
 }
 
-/** Удаляет все промежуточные сообщения бота в этом чате. */
-async function purgeEphemeral(chatId) {
-  const list = ephemeralMsgs.get(chatId) || [];
-  ephemeralMsgs.delete(chatId);
-  await Promise.all(list.map((id) => deleteTgMessage(chatId, id)));
+/** Удаляет все промежуточные сообщения бота в этом чате (память + диск). */
+async function purgeEphemeral(chatId, { keepIds = [] } = {}) {
+  const key = chatKey(chatId);
+  const store = loadEphemeralStore();
+  const list = Array.isArray(store[key]) ? store[key] : [];
+  const keep = new Set(keepIds);
+  const toDelete = list.filter((id) => !keep.has(id));
+  const toKeep = list.filter((id) => keep.has(id));
+  if (toKeep.length) store[key] = toKeep;
+  else delete store[key];
+  saveEphemeralStore(store);
+  // последовательно — меньше flood-лимитов Telegram
+  for (const id of toDelete) {
+    await deleteTgMessage(chatId, id);
+  }
 }
 
 /** Удаляет сообщение с кнопками черновика; если нельзя — хотя бы снимает клавиатуру. */
@@ -994,6 +1025,8 @@ async function beginCapture(chatId) {
 }
 
 async function showDraftPreview(chatId, draft) {
+  // Убираем гайд / «слушаю» / «раскладываю» — в чате остаётся только черновик
+  await purgeEphemeral(chatId);
   const prev = sessions.get(chatId);
   sessions.set(chatId, { step: 'preview', draft, ...(prev?.title ? { title: prev.title } : {}) });
   await replyEphemeral(chatId, formatDraftPreview(draft), {
@@ -1016,6 +1049,39 @@ async function ingestRawInput(chatId, raw, { source = 'Telegram', from = null } 
   await showDraftPreview(chatId, draft);
 }
 
+function formatCreatedReply({
+  code,
+  title,
+  board,
+  column,
+  priority,
+  creatorText,
+  assigneeKeys,
+  notifyLine,
+  link,
+}) {
+  const prio = PRIORITY_STATES[priority] || PRIORITY_STATES.normal;
+  const codeLine = code
+    ? `<code>${escapeHtml(code)}</code> · <b>${escapeHtml(title || '—')}</b>`
+    : `<b>${escapeHtml(title || '—')}</b>`;
+  return (
+    '<b>✅ Создано</b>\n' +
+    `${codeLine}\n\n` +
+    '<blockquote>' +
+    '<b>Доска</b>\n' +
+    `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>\n\n` +
+    '<b>Приоритет</b>\n' +
+    `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
+    '<b>Кто создал</b>\n' +
+    `<i>${escapeHtml(creatorText)}</i>\n\n` +
+    '<b>Исполнитель</b>\n' +
+    `${formatAssigneesDraftLine(assigneeKeys)}` +
+    '</blockquote>\n\n' +
+    `<i>${notifyLine}</i>\n` +
+    `<a href="${link}">Открыть в YouGile</a>`
+  );
+}
+
 async function createFromDraft(chatId, draft) {
   const boards = await fetchBoards();
   const place = pickSandboxColumn(boards);
@@ -1027,8 +1093,9 @@ async function createFromDraft(chatId, draft) {
     [PRIORITY_STICKER_ID]: PRIORITY_STATES[priority].id,
   };
 
+  const title = String(draft.title || '').trim() || 'Без названия';
   const task = await createYougileTask({
-    title: draft.title.trim().slice(0, 200),
+    title: title.slice(0, 200),
     descriptionHtml: descHtml,
     columnId: place.columnId,
     assigned,
@@ -1037,16 +1104,15 @@ async function createFromDraft(chatId, draft) {
 
   rememberTaskInState(task, place.board, place.column);
 
-  const assigneesText = formatAssigneesTelegram(draft.assigneeKeys);
   const creatorText = formatCreatorLine(draft);
   const html = formatCreateNotify({
-    title: task.title || draft.title,
+    title: task.title || title,
     code: task.idTaskProject || '',
     taskId: task.id,
     board: place.board,
     column: place.column,
     description: stripMarkerFromDesc(task.description || descHtml),
-    assigneesText,
+    assigneesText: formatAssigneesTelegram(draft.assigneeKeys),
     priorityLabel: PRIORITY_STATES[priority].label,
     creatorText,
   });
@@ -1054,20 +1120,24 @@ async function createFromDraft(chatId, draft) {
   const notify = await notifyGroup(html);
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
   const notifyLine = notify.ok
-    ? '📣 В группу отправил.'
-    : `⚠️ Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
+    ? 'В группу отправил'
+    : `Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
 
   await purgeEphemeral(chatId);
   sessions.delete(chatId);
   await reply(
     chatId,
-    `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || draft.title)}\n` +
-      `${escapeHtml(place.board)} / ${escapeHtml(place.column)}\n` +
-      `Приоритет: ${escapeHtml(PRIORITY_STATES[priority].label)}\n` +
-      `Кто создал: ${escapeHtml(creatorText)}\n` +
-      `Исполнитель: ${assigneesText}\n` +
-      `${notifyLine}\n` +
-      `<a href="${link}">Открыть в YouGile</a>`,
+    formatCreatedReply({
+      code: task.idTaskProject || '',
+      title: task.title || title,
+      board: place.board,
+      column: place.column,
+      priority,
+      creatorText,
+      assigneeKeys: draft.assigneeKeys,
+      notifyLine,
+      link,
+    }),
     { reply_markup: mainKeyboard() },
   );
 
@@ -1523,9 +1593,11 @@ async function handleCallbackQuery(cq) {
       return;
     }
     sessions.set(chatId, { step: 'creating' });
+    // Запоминаем id черновика на диске на случай рестарта, затем удаляем
+    if (cq.message?.message_id) trackEphemeral(chatId, cq.message.message_id);
     await dismissCallbackMessage(cq);
     try {
-      await replyEphemeral(chatId, '⏳ Создаю в Sandbox…');
+      // Без «⏳ Создаю…» — в чате останется только финальный ✅
       await createFromDraft(chatId, draft);
     } catch (e) {
       console.error(e);
