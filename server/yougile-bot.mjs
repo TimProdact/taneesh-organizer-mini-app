@@ -7,7 +7,8 @@
  *   YOUGILE_TELEGRAM_BOT_TOKEN
  *   YOUGILE_TELEGRAM_CHAT_ID          — группа: только новые задачи
  *   YOUGILE_TELEGRAM_CHAT_ID_PRIVATE  — личка: переносы / удаления / прочее
- *   OPENAI_API_KEY                    — Whisper для голосовых (опционально; иначе local whisper)
+ *   GROQ_API_KEY                      — Whisper + разбор структуры (бесплатный облачный tier)
+ *   OPENAI_API_KEY                    — запасной вариант (если нет Groq)
  *   YOUGILE_NOTIFY_THREAD_ID          — topic id, если группа-форум (только для group)
  */
 import {
@@ -546,36 +547,65 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
   };
 }
 
-/** Optional LLM refine when OPENAI_API_KEY set. */
-async function refineDraftWithOpenAI(draft) {
-  const key = env('OPENAI_API_KEY');
-  if (!key || !draft.raw) return draft;
+/** Optional LLM refine: Groq (preferred) or OpenAI. */
+async function refineDraftWithLlm(draft) {
+  if (!draft.raw) return draft;
+  const groqKey = env('GROQ_API_KEY');
+  const openaiKey = env('OPENAI_API_KEY');
+  if (!groqKey && !openaiKey) return draft;
+
+  const messages = [
+    {
+      role: 'system',
+      content:
+        'Ты помощник Taneesh. Разложи текст задачи на JSON поля: title, type, context, asNow, asShould, tech. ' +
+        'type — коротко (Баг, Доработка UI, Новая фича, Инфраструктура, B2B / ops, Релиз, Баг / аналитика, Уточнить). ' +
+        'Пиши по-русски, без воды. Если поля нет — "—". Верни только JSON.',
+    },
+    { role: 'user', content: draft.raw },
+  ];
+
   try {
-    const r = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: env('OPENAI_STRUCTURE_MODEL', 'gpt-4o-mini'),
-        temperature: 0.2,
-        response_format: { type: 'json_object' },
-        messages: [
-          {
-            role: 'system',
-            content:
-              'Ты помощник Taneesh. Разложи текст задачи на JSON поля: title, type, context, asNow, asShould, tech. ' +
-              'type — коротко (Баг, Доработка UI, Новая фича, Инфраструктура, B2B / ops, Релиз, Баг / аналитика, Уточнить). ' +
-              'Пиши по-русски, без воды. Если поля нет — "—".',
-          },
-          { role: 'user', content: draft.raw },
-        ],
-      }),
-    });
-    if (!r.ok) return draft;
-    const data = await r.json();
-    const raw = data.choices?.[0]?.message?.content || '';
+    let data;
+    if (groqKey) {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${groqKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: env('GROQ_STRUCTURE_MODEL', 'llama-3.3-70b-versatile'),
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+      });
+      if (!r.ok) {
+        console.error('refineDraft groq', r.status, await r.text());
+        if (!openaiKey) return draft;
+      } else {
+        data = await r.json();
+      }
+    }
+    if (!data && openaiKey) {
+      const r = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openaiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: env('OPENAI_STRUCTURE_MODEL', 'gpt-4o-mini'),
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+      });
+      if (!r.ok) return draft;
+      data = await r.json();
+    }
+    const raw = data?.choices?.[0]?.message?.content || '';
     const parsed = JSON.parse(raw);
     return {
       ...draft,
@@ -625,7 +655,7 @@ async function showDraftPreview(chatId, draft) {
 async function ingestRawInput(chatId, raw, { source = 'Telegram' } = {}) {
   await reply(chatId, '🧠 Раскладываю по структуре…');
   let draft = structureTaskFromText(raw, { source });
-  draft = await refineDraftWithOpenAI(draft);
+  draft = await refineDraftWithLlm(draft);
   await showDraftPreview(chatId, draft);
 }
 
@@ -904,6 +934,28 @@ function runCmd(cmd, args, opts = {}) {
   });
 }
 
+async function transcribeWithGroq(filePath) {
+  const key = env('GROQ_API_KEY');
+  if (!key) return null;
+  const buf = readFileSync(filePath);
+  const form = new FormData();
+  form.append('file', new Blob([buf]), filePath.split('/').pop() || 'voice.ogg');
+  form.append('model', env('GROQ_WHISPER_MODEL', 'whisper-large-v3-turbo'));
+  form.append('language', 'ru');
+  form.append('response_format', 'json');
+  const r = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Groq Whisper ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await r.json();
+  return String(data.text || '').trim();
+}
+
 async function transcribeWithOpenAI(filePath) {
   const key = env('OPENAI_API_KEY');
   if (!key) return null;
@@ -963,12 +1015,22 @@ async function transcribeWithLocalWhisper(filePath) {
 }
 
 async function transcribeVoiceFile(filePath) {
-  const openai = await transcribeWithOpenAI(filePath);
-  if (openai) return openai;
+  try {
+    const groq = await transcribeWithGroq(filePath);
+    if (groq) return groq;
+  } catch (e) {
+    console.error('groq whisper', e.message);
+  }
+  try {
+    const openai = await transcribeWithOpenAI(filePath);
+    if (openai) return openai;
+  } catch (e) {
+    console.error('openai whisper', e.message);
+  }
   const local = await transcribeWithLocalWhisper(filePath);
   if (local) return local;
   throw new Error(
-    'Нет расшифровки: добавь OPENAI_API_KEY в .env или установи python-пакет openai-whisper',
+    'Нет расшифровки: добавь GROQ_API_KEY (бесплатно: console.groq.com) или OPENAI_API_KEY',
   );
 }
 

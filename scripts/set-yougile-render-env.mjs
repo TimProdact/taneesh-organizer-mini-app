@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 /**
- * Set YOUGILE_* (+ optional OPENAI) env on Render taneesh-organizer-api and redeploy.
+ * Set YOUGILE_* (+ optional GROQ_API_KEY / OPENAI) env on Render and redeploy.
  *
- * Requires RENDER_API_KEY in env or organizer-mini-app/.env
- *   https://dashboard.render.com/u/settings#api-keys
+ * RENDER_API_KEY from env, .env, or ~/.render/cli.yaml
  *
  * Usage:
  *   node scripts/set-yougile-render-env.mjs
@@ -11,6 +10,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const SERVICE_NAME = 'taneesh-organizer-api';
@@ -36,13 +36,22 @@ function loadEnvFile(path) {
   }
 }
 
+function loadRenderCliKey() {
+  const p = join(homedir(), '.render', 'cli.yaml');
+  if (!existsSync(p)) return;
+  for (const line of readFileSync(p, 'utf8').split('\n')) {
+    const m = line.match(/^\s*key:\s*(rnd_\S+)/);
+    if (m && !process.env.RENDER_API_KEY) process.env.RENDER_API_KEY = m[1];
+  }
+}
+
 loadEnvFile(join(ROOT, '.env'));
 loadEnvFile(join(ROOT, '..', '.env'));
+loadRenderCliKey();
 
 const API_KEY = process.env.RENDER_API_KEY;
 if (!API_KEY) {
-  console.error('RENDER_API_KEY не задан. Создай ключ: https://dashboard.render.com/u/settings#api-keys');
-  console.error('Потом: export RENDER_API_KEY=rnd_... && node scripts/set-yougile-render-env.mjs');
+  console.error('RENDER_API_KEY не задан. Сделай: render login');
   process.exit(1);
 }
 
@@ -75,6 +84,9 @@ const ENV_PUT = {
   YOUGILE_NOTIFY_BOARDS: process.env.YOUGILE_NOTIFY_BOARDS || '*',
 };
 
+if (process.env.GROQ_API_KEY) {
+  ENV_PUT.GROQ_API_KEY = process.env.GROQ_API_KEY;
+}
 if (process.env.OPENAI_API_KEY) {
   ENV_PUT.OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 }
@@ -139,8 +151,10 @@ async function main() {
     await upsertEnv(svc.id, k, v);
   }
 
-  if (!process.env.OPENAI_API_KEY) {
-    console.warn('⚠ OPENAI_API_KEY нет — голос на Render без ключа не заработает (нужен Whisper API).');
+  if (!process.env.GROQ_API_KEY && !process.env.OPENAI_API_KEY) {
+    console.warn(
+      '⚠ GROQ_API_KEY нет — голос на Render не заработает. Бесплатно: https://console.groq.com/keys',
+    );
   }
 
   console.log('→ trigger deploy');
