@@ -637,6 +637,47 @@ function parsePriorityFromText(text) {
   return 'normal';
 }
 
+function formatTypeCodes(type) {
+  const raw = dash(type);
+  if (raw === '—') return '<i>—</i>';
+  return raw
+    .split(/\s*[·/,|]\s*/)
+    .filter(Boolean)
+    .map((t) => `<code>${escapeHtml(t)}</code>`)
+    .join(' · ');
+}
+
+function cutField(s, n = 700) {
+  const t = dash(s);
+  return t.length > n ? `${t.slice(0, n)}…` : t;
+}
+
+/** Блоки 1–8 в цитате — общий вид для черновика и уведомления в группу. */
+function formatTaskBlocksHtml(draft) {
+  const prio = PRIORITY_STATES[draft.priority] || PRIORITY_STATES.normal;
+  return (
+    '<blockquote>' +
+    '<b>1. Название</b>\n' +
+    `<i>${escapeHtml(cutField(draft.title, 200))}</i>\n\n` +
+    '<b>2. Тип</b>\n' +
+    `${formatTypeCodes(draft.type)}\n\n` +
+    '<b>3. Контекст</b>\n' +
+    `<i>${escapeHtml(cutField(draft.context))}</i>\n\n` +
+    '<b>4. Как сейчас</b>\n' +
+    `<i>${escapeHtml(cutField(draft.asNow))}</i>\n\n` +
+    '<b>5. Как надо</b>\n' +
+    `<i>${escapeHtml(cutField(draft.asShould))}</i>\n\n` +
+    '<b>6. Технически</b>\n' +
+    `<i>${escapeHtml(cutField(draft.tech))}</i>\n\n` +
+    '<b>7. Приоритет</b>\n' +
+    `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
+    '<b>8. Исполнитель</b>\n' +
+    `${formatAssigneesDraftLine(draft.assigneeKeys)}\n` +
+    `<i>Кто создал: ${escapeHtml(formatCreatorLine(draft))}</i>` +
+    '</blockquote>'
+  );
+}
+
 function formatCreateNotify({
   title,
   code,
@@ -644,28 +685,43 @@ function formatCreateNotify({
   board,
   column,
   description,
+  draft = null,
   assigneesText,
   priorityLabel,
   creatorText,
 }) {
   const company = env('YOUGILE_COMPANY_ID');
-  const head = code ? `<b>${escapeHtml(code)}</b> · ${escapeHtml(title)}` : `<b>${escapeHtml(title)}</b>`;
+  const link = `<a href="${taskLink(company, taskId)}">Открыть в YouGile</a>`;
+  const head = code
+    ? `<code>${escapeHtml(code)}</code> · <b>${escapeHtml(title || '—')}</b>`
+    : `<b>${escapeHtml(title || '—')}</b>`;
+  const place = `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>`;
+
+  if (draft) {
+    return (
+      `${head}\n` +
+      `${place}\n\n` +
+      formatTaskBlocksHtml(draft) +
+      (draft.source ? `\n\n<i>Источник: ${escapeHtml(dash(draft.source))}</i>` : '') +
+      `\n\n${link}`
+    );
+  }
+
+  // Синк чужих задач без draft — короткая карточка
+  const prio = escapeHtml(priorityLabel || '—');
   let body = htmlToText(stripMarkerFromDesc(description));
-  if (body.length > 2800) body = `${body.slice(0, 2800)}…`;
-  return [
-    '<b>Создание</b>',
-    head,
-    `${escapeHtml(board)} / ${escapeHtml(column)}`,
-    '',
-    `<b>Приоритет:</b> ${escapeHtml(priorityLabel || 'normal')}`,
-    `<b>Кто создал:</b> ${creatorText || 'неизвестно'}`,
-    `<b>Исполнитель:</b> ${assigneesText || 'не назначен'}`,
-    '',
-    '<b>Описание:</b>',
-    escapeHtml(body || '—'),
-    '',
-    `<a href="${taskLink(company, taskId)}">Открыть в YouGile</a>`,
-  ].join('\n');
+  if (body.length > 1200) body = `${body.slice(0, 1200)}…`;
+  return (
+    `${head}\n` +
+    `${place}\n\n` +
+    '<blockquote>' +
+    `<b>Приоритет</b>\n<code>${prio}</code>\n\n` +
+    `<b>Кто создал</b>\n<i>${escapeHtml(creatorText || '—')}</i>\n\n` +
+    `<b>Исполнитель</b>\n<i>${escapeHtml(assigneesText || 'не назначен')}</i>\n\n` +
+    `<b>Описание</b>\n<i>${escapeHtml(body || '—')}</i>` +
+    '</blockquote>\n\n' +
+    link
+  );
 }
 
 function rememberTaskInState(task, board, column) {
@@ -706,41 +762,11 @@ function dash(v) {
 }
 
 function formatDraftPreview(draft) {
-  const cut = (s, n = 700) => {
-    const t = dash(s);
-    return t.length > n ? `${t.slice(0, n)}…` : t;
-  };
-  const prio = PRIORITY_STATES[draft.priority] || PRIORITY_STATES.normal;
-  const type = dash(draft.type);
-  const typeHtml = type
-    .split(/\s*[·/,|]\s*/)
-    .filter(Boolean)
-    .map((t) => `<code>${escapeHtml(t)}</code>`)
-    .join(' · ');
-
   return (
     '<b>Черновик задачи</b>\n' +
     '<i>Проверь и нажми кнопку ниже</i>\n\n' +
-    '<blockquote>' +
-    '<b>1. Название</b>\n' +
-    `<i>${escapeHtml(cut(draft.title, 200))}</i>\n\n` +
-    '<b>2. Тип</b>\n' +
-    `${typeHtml || '<i>—</i>'}\n\n` +
-    '<b>3. Контекст</b>\n' +
-    `<i>${escapeHtml(cut(draft.context))}</i>\n\n` +
-    '<b>4. Как сейчас</b>\n' +
-    `<i>${escapeHtml(cut(draft.asNow))}</i>\n\n` +
-    '<b>5. Как надо</b>\n' +
-    `<i>${escapeHtml(cut(draft.asShould))}</i>\n\n` +
-    '<b>6. Технически</b>\n' +
-    `<i>${escapeHtml(cut(draft.tech))}</i>\n\n` +
-    '<b>7. Приоритет</b>\n' +
-    `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
-    '<b>8. Исполнитель</b>\n' +
-    `${formatAssigneesDraftLine(draft.assigneeKeys)}\n` +
-    `<i>Кто создал: ${escapeHtml(formatCreatorLine(draft))}</i>` +
-    '</blockquote>\n\n' +
-    `<i>Источник: ${escapeHtml(dash(draft.source))}</i>`
+    formatTaskBlocksHtml(draft) +
+    `\n\n<i>Источник: ${escapeHtml(dash(draft.source))}</i>`
   );
 }
 
@@ -1111,9 +1137,7 @@ async function createFromDraft(chatId, draft) {
     taskId: task.id,
     board: place.board,
     column: place.column,
-    description: stripMarkerFromDesc(task.description || descHtml),
-    assigneesText: formatAssigneesTelegram(draft.assigneeKeys),
-    priorityLabel: PRIORITY_STATES[priority].label,
+    draft,
     creatorText,
   });
 
