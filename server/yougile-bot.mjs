@@ -1045,42 +1045,39 @@ async function beginCapture(chatId) {
     chatId,
     STRUCTURE_GUIDE +
       '\n\n⬇️ <b>Пришли текст или голосовое</b>\n' +
-      '<i>Сначала черновик — создам только после кнопки</i>',
+      '<i>Сначала покажу расшифровку/текст — создам только после кнопки</i>',
     { reply_markup: cancelKeyboard() },
   );
 }
 
 async function showDraftPreview(chatId, draft) {
-  // Убираем гайд / «слушаю» / «раскладываю» — в чате остаётся только черновик
+  // Убираем гайд / «слушаю» — до кнопки только расшифровка/текст + кнопки
   await purgeEphemeral(chatId);
   const prev = sessions.get(chatId);
   sessions.set(chatId, { step: 'preview', draft, ...(prev?.title ? { title: prev.title } : {}) });
-  await replyEphemeral(chatId, formatDraftPreview(draft), {
+  await replyEphemeral(chatId, formatConfirmPreview(draft), {
     reply_markup: draftKeyboard(),
   });
 }
 
 async function ingestRawInput(chatId, raw, { source = 'Telegram', from = null } = {}) {
-  await replyEphemeral(chatId, '🧠 Раскладываю по структуре…');
-  let draft = structureTaskFromText(raw, { source });
+  // Быстрый разбор без LLM — полную структуру делаем при «Создать»
+  const draft = structureTaskFromText(raw, { source });
   const creator = resolveCreator(from);
-  draft.creatorKey = creator.key;
-  draft.creatorLabel = creator.label;
-  draft.creatorTelegram = creator.telegram;
-  draft = await refineDraftWithLlm(draft);
-  // LLM не должен затирать creator
   draft.creatorKey = creator.key;
   draft.creatorLabel = creator.label;
   draft.creatorTelegram = creator.telegram;
   await showDraftPreview(chatId, draft);
 }
 
-function formatTranscriptReply(raw) {
-  const text = String(raw || '').trim();
+/** Превью до создания: только сырой текст (расшифровка / ввод) + кнопки. */
+function formatConfirmPreview(draft) {
+  const isVoice = /голос/i.test(String(draft.source || ''));
+  const text = String(draft.raw || '').trim();
   const cut = text.length > 3500 ? `${text.slice(0, 3500)}…` : text;
   return (
-    '<b>📝 Расшифровка</b>\n' +
-    '<i>То, что распознали из голосового</i>\n\n' +
+    (isVoice ? '<b>📝 Расшифровка</b>\n' : '<b>📝 Текст</b>\n') +
+    '<i>Проверь и нажми кнопку ниже</i>\n\n' +
     '<blockquote>' +
     `<i>${escapeHtml(cut || '—')}</i>` +
     '</blockquote>'
@@ -1111,17 +1108,31 @@ function formatCreatedReply({
 }
 
 async function createFromDraft(chatId, draft) {
+  // На «Создать» — раскладка по полям + LLM, затем YouGile и карточка 1–8
+  let ready = draft;
+  const savedCreator = {
+    key: draft.creatorKey,
+    label: draft.creatorLabel,
+    telegram: draft.creatorTelegram,
+  };
+  ready = await refineDraftWithLlm(ready);
+  if (savedCreator.label) {
+    ready.creatorKey = savedCreator.key;
+    ready.creatorLabel = savedCreator.label;
+    ready.creatorTelegram = savedCreator.telegram;
+  }
+
   const boards = await fetchBoards();
   const place = pickSandboxColumn(boards);
-  const descHtml = buildTemplateDescription(draft);
-  const people = peopleByKeys(draft.assigneeKeys);
+  const descHtml = buildTemplateDescription(ready);
+  const people = peopleByKeys(ready.assigneeKeys);
   const assigned = people.map((p) => p.yougileId);
-  const priority = PRIORITY_STATES[draft.priority] ? draft.priority : 'normal';
+  const priority = PRIORITY_STATES[ready.priority] ? ready.priority : 'normal';
   const stickers = {
     [PRIORITY_STICKER_ID]: PRIORITY_STATES[priority].id,
   };
 
-  const title = String(draft.title || '').trim() || 'Без названия';
+  const title = String(ready.title || '').trim() || 'Без названия';
   const task = await createYougileTask({
     title: title.slice(0, 200),
     descriptionHtml: descHtml,
@@ -1132,14 +1143,14 @@ async function createFromDraft(chatId, draft) {
 
   rememberTaskInState(task, place.board, place.column);
 
-  const creatorText = formatCreatorLine(draft);
+  const creatorText = formatCreatorLine(ready);
   const html = formatCreateNotify({
     title: task.title || title,
     code: task.idTaskProject || '',
     taskId: task.id,
     board: place.board,
     column: place.column,
-    draft,
+    draft: ready,
     creatorText,
   });
 
@@ -1152,12 +1163,6 @@ async function createFromDraft(chatId, draft) {
   await purgeEphemeral(chatId);
   sessions.delete(chatId);
 
-  // Сначала расшифровка (для голосовых), потом карточка задачи 1–8
-  const isVoice = /голос/i.test(String(draft.source || ''));
-  if (isVoice && String(draft.raw || '').trim()) {
-    await reply(chatId, formatTranscriptReply(draft.raw));
-  }
-
   await reply(
     chatId,
     formatCreatedReply({
@@ -1165,7 +1170,7 @@ async function createFromDraft(chatId, draft) {
       title: task.title || title,
       board: place.board,
       column: place.column,
-      draft,
+      draft: ready,
       notifyLine,
       link,
     }),
