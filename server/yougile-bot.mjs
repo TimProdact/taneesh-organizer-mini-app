@@ -65,7 +65,7 @@ const STRUCTURE_GUIDE =
   '   <i>«… Исполнитель: Рашид»</i> или просто в конце «Рауф»\n\n' +
   'Потом черновик: создать / изменить / отменить.';
 
-/** YouGile user id + Telegram @ + email */
+/** YouGile user id + Telegram @ + email (+ telegramId когда известен) */
 const PEOPLE = [
   {
     key: 'rauf',
@@ -73,6 +73,7 @@ const PEOPLE = [
     yougileId: 'f2ead94b-0bdf-4fdb-9eea-72987bdc9749',
     email: 'abduraufcoder@gmail.com',
     telegram: '@rauf_cc',
+    telegramId: null, // узнаем после /start
     label: 'Рауф',
   },
   {
@@ -81,9 +82,19 @@ const PEOPLE = [
     yougileId: '81061eb1-1547-4004-9a21-3ff871b6aa26',
     email: 'rashid.tadjiev@gmail.com',
     telegram: '@Marshall2221',
+    telegramId: 74803663,
     label: 'Рашид',
   },
 ];
+
+/** Кто может пользоваться ботом в личке (текст / голос). */
+const TEAM_OPERATORS = [
+  { id: 1696518783, username: 'mundesign', label: 'Тимур' },
+  { id: 74803663, username: 'Marshall2221', label: 'Рашид' },
+  { id: null, username: 'rauf_cc', label: 'Рауф' },
+];
+
+const USERS_PATH = join(ROOT, '.yougile-bot-users.json');
 
 /** Стикер «Приоритет» в YouGile */
 const PRIORITY_STICKER_ID = 'e7d00330-5995-48f8-9ba9-3c90c4b22742';
@@ -152,6 +163,85 @@ function stripMarkerFromDesc(htmlOrText) {
     .replace(new RegExp(`\\s*#?${MARKER}\\s*`, 'gi'), '')
     .replace(/<p>\s*<\/p>/gi, '')
     .trim();
+}
+
+function loadKnownUsers() {
+  try {
+    if (existsSync(USERS_PATH)) return JSON.parse(readFileSync(USERS_PATH, 'utf8'));
+  } catch {
+    /* ignore */
+  }
+  return { users: {} };
+}
+
+function saveKnownUsers(data) {
+  writeFileSync(USERS_PATH, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+/** Запоминаем telegram id после /start — чтобы потом слать в личку. */
+function rememberTelegramUser(from) {
+  if (!from?.id) return;
+  const data = loadKnownUsers();
+  if (!data.users) data.users = {};
+  data.users[String(from.id)] = {
+    id: from.id,
+    username: from.username || '',
+    firstName: from.first_name || '',
+    lastName: from.last_name || '',
+    updatedAt: new Date().toISOString(),
+  };
+  saveKnownUsers(data);
+  // подтянуть id Рауфа в рантайм-кэш PEOPLE
+  const uname = String(from.username || '').toLowerCase();
+  for (const p of PEOPLE) {
+    if (p.telegram.replace(/^@/, '').toLowerCase() === uname) {
+      p.telegramId = from.id;
+    }
+  }
+}
+
+function allowedIdSet() {
+  const ids = new Set();
+  const names = new Set();
+  for (const op of TEAM_OPERATORS) {
+    if (op.id != null) ids.add(Number(op.id));
+    if (op.username) names.add(String(op.username).toLowerCase().replace(/^@/, ''));
+  }
+  for (const p of PEOPLE) {
+    if (p.telegramId != null) ids.add(Number(p.telegramId));
+    if (p.telegram) names.add(p.telegram.replace(/^@/, '').toLowerCase());
+  }
+  // env override / дополнение: YOUGILE_BOT_ALLOW=id,@user,id2
+  for (const part of splitChatIds(env('YOUGILE_BOT_ALLOW'))) {
+    if (/^\d+$/.test(part)) ids.add(Number(part));
+    else names.add(part.replace(/^@/, '').toLowerCase());
+  }
+  // уже писавшие /start
+  const known = loadKnownUsers().users || {};
+  for (const u of Object.values(known)) {
+    if (u?.id) ids.add(Number(u.id));
+    if (u?.username) names.add(String(u.username).toLowerCase());
+  }
+  return { ids, names };
+}
+
+function isAllowedOperator(from) {
+  if (!from) return false;
+  const { ids, names } = allowedIdSet();
+  if (ids.has(Number(from.id))) return true;
+  const uname = String(from.username || '')
+    .toLowerCase()
+    .replace(/^@/, '');
+  if (uname && names.has(uname)) return true;
+  return false;
+}
+
+async function denyAccess(chatId) {
+  await reply(
+    chatId,
+    'Доступ только для команды Taneesh (Тимур, Рашид @Marshall2221, Рауф @rauf_cc).\n' +
+      'Если ты из команды — напиши Тимуру.',
+  );
 }
 
 async function tg(method, body) {
@@ -1225,6 +1315,21 @@ async function handleCallbackQuery(cq) {
   const data = String(cq.data || '');
   if (chatId == null) return;
 
+  const from = cq.from;
+  if (!isAllowedOperator(from)) {
+    try {
+      await tg('answerCallbackQuery', {
+        callback_query_id: cq.id,
+        text: 'Нет доступа',
+        show_alert: true,
+      });
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  rememberTelegramUser(from);
+
   try {
     await tg('answerCallbackQuery', { callback_query_id: cq.id });
   } catch {
@@ -1279,8 +1384,26 @@ export async function handleYougileUpdate(update) {
   if (!msg?.chat) return { ok: true, ignored: true };
 
   const chatId = msg.chat.id;
+  const from = msg.from;
+  const isPrivate = msg.chat.type === 'private';
+
+  // Личка — только команда (Тимур / Рашид / Рауф)
+  if (isPrivate) {
+    if (!isAllowedOperator(from)) {
+      await denyAccess(chatId);
+      return { ok: true, denied: true };
+    }
+    rememberTelegramUser(from);
+  }
+
   const text = String(msg.text || msg.caption || '').trim();
   const session = sessions.get(chatId);
+
+  // /start team|... 
+  if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text) || text === '/help') {
+    await handleStart(chatId);
+    return { ok: true };
+  }
 
   if (msg.voice || msg.audio || msg.video_note) {
     await handleVoice(chatId, msg);
@@ -1288,11 +1411,6 @@ export async function handleYougileUpdate(update) {
   }
 
   if (!text) return { ok: true, ignored: true };
-
-  if (text === '/start' || text === '/help') {
-    await handleStart(chatId);
-    return { ok: true };
-  }
 
   if (text === BTN_CANCEL || text === '/cancel') {
     sessions.delete(chatId);

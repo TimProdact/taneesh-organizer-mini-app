@@ -11,3 +11,4 @@ data/*.json
 .yougile-notify-state.json
 .yougile-tmp/
 .yougile-notify-state.json
+.yougile-bot-users.json
