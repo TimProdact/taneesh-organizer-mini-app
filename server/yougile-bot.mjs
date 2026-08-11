@@ -36,7 +36,6 @@ const BTN_SYNC = '🔄 Проверить YouGile';
 const BTN_CANCEL = '❌ Отмена';
 
 const CB_CREATE = 'draft:create';
-const CB_EDIT = 'draft:edit';
 const CB_CANCEL = 'draft:cancel';
 
 /**
@@ -63,7 +62,7 @@ const STRUCTURE_GUIDE =
   '<b>Рашид</b> и/или <b>Рауф</b>\n' +
   '<i>Исполнитель: Рашид</i>' +
   '</blockquote>\n\n' +
-  'Дальше черновик: <b>создать</b> / <b>изменить</b> / <b>отменить</b>';
+  'Дальше: <b>создать</b> или <b>отменить</b>';
 
 /** YouGile user id + Telegram @ + email (+ telegramId когда известен) */
 const PEOPLE = [
@@ -748,10 +747,7 @@ function draftKeyboard() {
   return {
     inline_keyboard: [
       [{ text: '✅ Создать задачу', callback_data: CB_CREATE }],
-      [
-        { text: '✏️ Изменить текст', callback_data: CB_EDIT },
-        { text: '❌ Отменить', callback_data: CB_CANCEL },
-      ],
+      [{ text: '❌ Отменить', callback_data: CB_CANCEL }],
     ],
   };
 }
@@ -1032,7 +1028,7 @@ async function handleStart(chatId) {
     '<b>Taneesh YouGile</b>\n' +
       '<i>Sandbox → Нераспределённое</i>\n\n' +
       '• <b>Новая задача</b> — структура → черновик\n' +
-      '• Текст или войсик → <b>Создать / Изменить / Отменить</b>\n\n' +
+      '• Текст или войсик → <b>Создать / Отменить</b>\n\n' +
       STRUCTURE_GUIDE,
     { reply_markup: mainKeyboard() },
   );
@@ -1597,21 +1593,6 @@ async function handleCallbackQuery(cq) {
     await purgeEphemeral(chatId);
     sessions.delete(chatId);
     await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
-    return;
-  }
-
-  if (data === CB_EDIT) {
-    const draft = session?.draft;
-    await dismissCallbackMessage(cq);
-    await purgeEphemeral(chatId);
-    sessions.set(chatId, { step: 'edit', draft });
-    await replyEphemeral(
-      chatId,
-      '✏️ <b>Изменение черновика</b>\n' +
-        '<i>Пришли новый текст или голосовое — пересоберу структуру</i>\n\n' +
-        STRUCTURE_GUIDE,
-      { reply_markup: cancelKeyboard() },
-    );
     return;
   }
 
