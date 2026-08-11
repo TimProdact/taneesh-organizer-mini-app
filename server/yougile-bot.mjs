@@ -1126,8 +1126,6 @@ async function refineDraftWithLlm(draft) {
 async function handleStart(chatId, userMsgId = null) {
   await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
-  if (userMsgId != null) trackUserMessage(chatId, userMsgId);
-  // Гайд тоже ephemeral — удалится после Создать / Отменить / Новая задача
   await replyEphemeral(
     chatId,
     '<b>Taneesh YouGile</b>\n' +
@@ -1137,6 +1135,10 @@ async function handleStart(chatId, userMsgId = null) {
       STRUCTURE_GUIDE,
     { reply_markup: mainKeyboard() },
   );
+  // Команду /start сразу убираем из чата (остаётся только гайд)
+  if (userMsgId != null) {
+    await deleteTgMessage(chatId, userMsgId);
+  }
 }
 
 async function beginCapture(chatId) {
