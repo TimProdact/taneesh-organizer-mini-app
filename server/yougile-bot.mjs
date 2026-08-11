@@ -1123,10 +1123,12 @@ async function refineDraftWithLlm(draft) {
   }
 }
 
-async function handleStart(chatId) {
-  await purgeEphemeral(chatId);
+async function handleStart(chatId, userMsgId = null) {
+  await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
-  await reply(
+  if (userMsgId != null) trackUserMessage(chatId, userMsgId);
+  // Гайд тоже ephemeral — удалится после Создать / Отменить / Новая задача
+  await replyEphemeral(
     chatId,
     '<b>Taneesh YouGile</b>\n' +
       '<i>Sandbox → Нераспределённое</i>\n\n' +
