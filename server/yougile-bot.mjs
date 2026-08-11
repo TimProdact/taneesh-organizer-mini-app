@@ -126,6 +126,10 @@ const PRIORITY_STATES = {
 /** @type {Map<number, { step: string, title?: string, draft?: TaskDraft }>} */
 const sessions = new Map();
 
+/** Сообщения бота, которые чистим после создания / отмены (не трогаем финальный ✅). */
+/** @type {Map<number, number[]>} */
+const ephemeralMsgs = new Map();
+
 function env(name, fallback = '') {
   return (process.env[name] || fallback).trim();
 }
@@ -292,6 +296,36 @@ async function reply(chatId, text, extra = {}) {
     const { parse_mode: _p, ...rest } = payload;
     return tg('sendMessage', { ...rest, text: htmlToText(text) });
   }
+}
+
+function trackEphemeral(chatId, msgOrId) {
+  const id = typeof msgOrId === 'number' ? msgOrId : msgOrId?.message_id;
+  if (chatId == null || id == null) return;
+  const list = ephemeralMsgs.get(chatId) || [];
+  list.push(id);
+  ephemeralMsgs.set(chatId, list);
+}
+
+async function replyEphemeral(chatId, text, extra = {}) {
+  const msg = await reply(chatId, text, extra);
+  trackEphemeral(chatId, msg);
+  return msg;
+}
+
+async function deleteTgMessage(chatId, messageId) {
+  if (chatId == null || messageId == null) return;
+  try {
+    await tg('deleteMessage', { chat_id: chatId, message_id: messageId });
+  } catch (e) {
+    console.error('deleteMessage', e.message);
+  }
+}
+
+/** Удаляет все промежуточные сообщения бота в этом чате. */
+async function purgeEphemeral(chatId) {
+  const list = ephemeralMsgs.get(chatId) || [];
+  ephemeralMsgs.delete(chatId);
+  await Promise.all(list.map((id) => deleteTgMessage(chatId, id)));
 }
 
 /** Удаляет сообщение с кнопками черновика; если нельзя — хотя бы снимает клавиатуру. */
@@ -910,6 +944,7 @@ async function refineDraftWithLlm(draft) {
 }
 
 async function handleStart(chatId) {
+  await purgeEphemeral(chatId);
   sessions.delete(chatId);
   await reply(
     chatId,
@@ -923,8 +958,9 @@ async function handleStart(chatId) {
 }
 
 async function beginCapture(chatId) {
+  await purgeEphemeral(chatId);
   sessions.set(chatId, { step: 'await_input' });
-  await reply(
+  await replyEphemeral(
     chatId,
     STRUCTURE_GUIDE +
       '\n\n⬇️ <b>Пришли текст или голосовое</b>\n' +
@@ -934,14 +970,15 @@ async function beginCapture(chatId) {
 }
 
 async function showDraftPreview(chatId, draft) {
-  sessions.set(chatId, { step: 'preview', draft });
-  await reply(chatId, formatDraftPreview(draft), {
+  const prev = sessions.get(chatId);
+  sessions.set(chatId, { step: 'preview', draft, ...(prev?.title ? { title: prev.title } : {}) });
+  await replyEphemeral(chatId, formatDraftPreview(draft), {
     reply_markup: draftKeyboard(),
   });
 }
 
 async function ingestRawInput(chatId, raw, { source = 'Telegram', from = null } = {}) {
-  await reply(chatId, '🧠 Раскладываю по структуре…');
+  await replyEphemeral(chatId, '🧠 Раскладываю по структуре…');
   let draft = structureTaskFromText(raw, { source });
   const creator = resolveCreator(from);
   draft.creatorKey = creator.key;
@@ -996,6 +1033,7 @@ async function createFromDraft(chatId, draft) {
     ? '📣 В группу отправил.'
     : `⚠️ Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
 
+  await purgeEphemeral(chatId);
   sessions.delete(chatId);
   await reply(
     chatId,
@@ -1368,22 +1406,20 @@ async function handleVoice(chatId, msg) {
     await reply(chatId, 'Не нашёл аудио в сообщении.', { reply_markup: mainKeyboard() });
     return;
   }
-  await reply(chatId, '🎤 Слушаю и расшифровываю…');
+  await replyEphemeral(chatId, '🎤 Слушаю и расшифровываю…');
   let local;
   try {
     local = await downloadTelegramFile(voice.file_id);
     const transcript = await transcribeVoiceFile(local);
     if (!transcript) throw new Error('Пустая расшифровка');
-    await reply(
-      chatId,
-      `📝 Расшифровка:\n<i>${escapeHtml(transcript.slice(0, 1500))}</i>`,
-    );
+    // Расшифровку не показываем отдельно — она уйдёт в черновик, потом всё почистим
     await ingestRawInput(chatId, transcript, {
       source: 'Telegram · голосовое',
       from: msg.from,
     });
   } catch (e) {
     console.error('voice', e);
+    await purgeEphemeral(chatId);
     await reply(chatId, `Не смог обработать голосовое: ${escapeHtml(e.message)}`, {
       reply_markup: mainKeyboard(),
     });
@@ -1427,17 +1463,19 @@ async function handleCallbackQuery(cq) {
   const session = sessions.get(chatId);
 
   if (data === CB_CANCEL) {
-    sessions.delete(chatId);
     await dismissCallbackMessage(cq);
+    await purgeEphemeral(chatId);
+    sessions.delete(chatId);
     await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
     return;
   }
 
   if (data === CB_EDIT) {
     const draft = session?.draft;
-    sessions.set(chatId, { step: 'edit', draft });
     await dismissCallbackMessage(cq);
-    await reply(
+    await purgeEphemeral(chatId);
+    sessions.set(chatId, { step: 'edit', draft });
+    await replyEphemeral(
       chatId,
       '✏️ <b>Изменение черновика</b>\n' +
         '<i>Пришли новый текст или голосовое — пересоберу структуру</i>\n\n' +
@@ -1450,22 +1488,24 @@ async function handleCallbackQuery(cq) {
   if (data === CB_CREATE) {
     // Сразу забираем черновик и снимаем кнопки — повторный клик не создаст дубль
     const draft = session?.draft;
-    if (!draft || session?.step === 'creating') {
+    if (session?.step === 'creating' || !session) {
       await dismissCallbackMessage(cq);
-      if (!draft) {
-        await reply(chatId, 'Черновик потерялся. Пришли текст/войсик ещё раз.', {
-          reply_markup: mainKeyboard(),
-        });
-      }
+      return;
+    }
+    if (!draft) {
+      await dismissCallbackMessage(cq);
+      await purgeEphemeral(chatId);
+      sessions.delete(chatId);
       return;
     }
     sessions.set(chatId, { step: 'creating' });
     await dismissCallbackMessage(cq);
     try {
-      await reply(chatId, '⏳ Создаю в Sandbox…');
+      await replyEphemeral(chatId, '⏳ Создаю в Sandbox…');
       await createFromDraft(chatId, draft);
     } catch (e) {
       console.error(e);
+      await purgeEphemeral(chatId);
       sessions.delete(chatId);
       await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
         reply_markup: mainKeyboard(),
@@ -1513,6 +1553,7 @@ export async function handleYougileUpdate(update) {
   if (!text) return { ok: true, ignored: true };
 
   if (text === BTN_CANCEL || text === '/cancel') {
+    await purgeEphemeral(chatId);
     sessions.delete(chatId);
     await reply(chatId, 'Ок, отменил.', { reply_markup: mainKeyboard() });
     return { ok: true };
