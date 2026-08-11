@@ -1027,8 +1027,8 @@ async function handleStart(chatId) {
     chatId,
     '<b>Taneesh YouGile</b>\n' +
       '<i>Sandbox → Нераспределённое</i>\n\n' +
-      '• <b>Новая задача</b> — структура → черновик\n' +
-      '• Текст или войсик → <b>Создать / Отменить</b>\n\n' +
+      '• <b>Новая задача</b> — пришли текст или войсик\n' +
+      '• Дальше: <b>Создать</b> или <b>Отменить</b>\n\n' +
       STRUCTURE_GUIDE,
     { reply_markup: mainKeyboard() },
   );
@@ -1039,9 +1039,8 @@ async function beginCapture(chatId) {
   sessions.set(chatId, { step: 'await_input' });
   await replyEphemeral(
     chatId,
-    STRUCTURE_GUIDE +
-      '\n\n⬇️ <b>Пришли текст или голосовое</b>\n' +
-      '<i>Сначала покажу расшифровку/текст — создам только после кнопки</i>',
+    '⬇️ <b>Пришли текст или голосовое</b>\n' +
+      '<i>Покажу расшифровку — создам только после кнопки</i>',
     { reply_markup: cancelKeyboard() },
   );
 }
