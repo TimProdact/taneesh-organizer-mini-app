@@ -37,6 +37,7 @@ const BTN_CANCEL = '❌ Отмена';
 
 const CB_CREATE = 'draft:create';
 const CB_CANCEL = 'draft:cancel';
+const CB_TASK_DEL_PREFIX = 'task:del:';
 
 /**
  * Короткий гайд в HTML Bot API:
@@ -95,6 +96,7 @@ const TEAM_OPERATORS = [
 
 const USERS_PATH = join(ROOT, '.yougile-bot-users.json');
 const EPHEMERAL_PATH = join(ROOT, '.yougile-bot-ephemeral.json');
+const TASK_MSGS_PATH = join(ROOT, '.yougile-bot-task-msgs.json');
 
 /** Стикер «Приоритет» в YouGile */
 const PRIORITY_STICKER_ID = 'e7d00330-5995-48f8-9ba9-3c90c4b22742';
@@ -348,17 +350,19 @@ async function replyEphemeral(chatId, text, extra = {}) {
 }
 
 async function deleteTgMessage(chatId, messageId) {
-  if (chatId == null || messageId == null) return;
+  if (chatId == null || messageId == null) return false;
   try {
     await tg('deleteMessage', { chat_id: chatId, message_id: messageId });
+    return true;
   } catch (e) {
     console.error('deleteMessage', e.message);
+    return false;
   }
 }
 
 /**
- * Чистит сообщения бота. С includeUser — ещё и сообщения пользователя
- * (войс, «Новая задача», текст) — в личке Bot API это разрешено.
+ * Чистит сообщения бота. С includeUser — ещё и сообщения пользователя.
+ * Id убираем из стора только после успешного delete.
  */
 async function purgeEphemeral(chatId, { keepIds = [], includeUser = false } = {}) {
   const key = chatKey(chatId);
@@ -366,18 +370,27 @@ async function purgeEphemeral(chatId, { keepIds = [], includeUser = false } = {}
   const bucket = normalizeBucket(store[key]);
   const keep = new Set(keepIds);
 
-  const botDelete = bucket.bot.filter((id) => !keep.has(id));
+  const botTry = bucket.bot.filter((id) => !keep.has(id));
+  const userTry = includeUser ? bucket.user.filter((id) => !keep.has(id)) : [];
   const botKeep = bucket.bot.filter((id) => keep.has(id));
-  const userDelete = includeUser ? bucket.user.filter((id) => !keep.has(id)) : [];
-  const userKeep = includeUser ? bucket.user.filter((id) => keep.has(id)) : bucket.user;
+  const userKeepBase = includeUser
+    ? bucket.user.filter((id) => keep.has(id))
+    : [...bucket.user];
 
-  if (!botKeep.length && !userKeep.length) delete store[key];
-  else store[key] = { bot: botKeep, user: userKeep };
-  saveEphemeralStore(store);
-
-  for (const id of [...botDelete, ...userDelete]) {
-    await deleteTgMessage(chatId, id);
+  const botLeft = [];
+  const userLeft = [];
+  for (const id of botTry) {
+    if (!(await deleteTgMessage(chatId, id))) botLeft.push(id);
   }
+  for (const id of userTry) {
+    if (!(await deleteTgMessage(chatId, id))) userLeft.push(id);
+  }
+
+  const nextBot = [...botKeep, ...botLeft];
+  const nextUser = [...userKeepBase, ...userLeft];
+  if (!nextBot.length && !nextUser.length) delete store[key];
+  else store[key] = { bot: nextBot, user: nextUser };
+  saveEphemeralStore(store);
 }
 
 /** Удаляет сообщение с кнопками черновика; если нельзя — хотя бы снимает клавиатуру. */
@@ -426,7 +439,7 @@ function privateChatIds() {
  * @param {'group'|'dm'} channel
  * group → только новые задачи; dm → перенос/удаление/прочее
  */
-async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
+async function notifyTelegram(html, { channel = 'group', alsoChatId, reply_markup } = {}) {
   const ids = new Set(channel === 'dm' ? privateChatIds() : groupChatIds());
   if (alsoChatId != null) ids.add(String(alsoChatId));
   if (!ids.size) {
@@ -434,13 +447,14 @@ async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
       `notifyTelegram(${channel}): no chat id — set YOUGILE_TELEGRAM_CHAT_ID` +
         (channel === 'dm' ? '_PRIVATE' : ''),
     );
-    return { ok: false, sent: 0, errors: ['no chat id'] };
+    return { ok: false, sent: 0, errors: ['no chat id'], messages: [] };
   }
 
   const threadId = channel === 'group' ? env('YOUGILE_NOTIFY_THREAD_ID') : '';
   const plain = htmlToText(html);
   let sent = 0;
   const errors = [];
+  const messages = [];
 
   for (const chatId of ids) {
     let delivered = false;
@@ -453,9 +467,13 @@ async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
           disable_web_page_preview: true,
         };
         if (threadId) body.message_thread_id = Number(threadId);
-        await tg('sendMessage', body);
+        if (reply_markup) body.reply_markup = reply_markup;
+        const msg = await tg('sendMessage', body);
         delivered = true;
         sent += 1;
+        if (msg?.message_id != null) {
+          messages.push({ chatId: String(chatId), messageId: msg.message_id });
+        }
       } catch (e1) {
         try {
           const body = {
@@ -464,9 +482,13 @@ async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
             disable_web_page_preview: true,
           };
           if (threadId) body.message_thread_id = Number(threadId);
-          await tg('sendMessage', body);
+          if (reply_markup) body.reply_markup = reply_markup;
+          const msg = await tg('sendMessage', body);
           delivered = true;
           sent += 1;
+          if (msg?.message_id != null) {
+            messages.push({ chatId: String(chatId), messageId: msg.message_id });
+          }
         } catch (e2) {
           console.error(
             `notifyTelegram(${channel}) chat=${chatId} attempt=${attempt}`,
@@ -482,7 +504,7 @@ async function notifyTelegram(html, { channel = 'group', alsoChatId } = {}) {
 
   if (!sent) console.error(`notifyTelegram(${channel}) FAILED`, errors);
   else console.log(`notifyTelegram(${channel}) sent`, sent, 'chats', [...ids].join(','));
-  return { ok: sent > 0, sent, errors };
+  return { ok: sent > 0, sent, errors, messages };
 }
 
 /** @deprecated alias — новые задачи в группу */
@@ -567,6 +589,65 @@ async function createYougileTask({ title, descriptionHtml, columnId, assigned, s
     x.json(),
   );
   return full;
+}
+
+async function deleteYougileTask(taskId) {
+  const r = await fetch(`${YG_API}/tasks/${taskId}`, {
+    method: 'PUT',
+    headers: ygHeaders(),
+    body: JSON.stringify({ deleted: true }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`delete task ${r.status}: ${t.slice(0, 200)}`);
+  }
+  return true;
+}
+
+function loadTaskMsgs() {
+  try {
+    if (existsSync(TASK_MSGS_PATH)) return JSON.parse(readFileSync(TASK_MSGS_PATH, 'utf8'));
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+function saveTaskMsgs(data) {
+  try {
+    writeFileSync(TASK_MSGS_PATH, `${JSON.stringify(data)}\n`);
+  } catch (e) {
+    console.error('task msgs save', e.message);
+  }
+}
+
+function rememberTaskMessages(taskId, messages) {
+  if (!taskId || !messages?.length) return;
+  const store = loadTaskMsgs();
+  const prev = store[taskId]?.messages || [];
+  const merged = [...prev];
+  for (const m of messages) {
+    if (!m?.chatId || m.messageId == null) continue;
+    if (!merged.some((x) => String(x.chatId) === String(m.chatId) && x.messageId === m.messageId)) {
+      merged.push({ chatId: String(m.chatId), messageId: m.messageId });
+    }
+  }
+  store[taskId] = { messages: merged, updatedAt: new Date().toISOString() };
+  saveTaskMsgs(store);
+}
+
+function takeTaskMessages(taskId) {
+  const store = loadTaskMsgs();
+  const list = store[taskId]?.messages || [];
+  delete store[taskId];
+  saveTaskMsgs(store);
+  return list;
+}
+
+function createdTaskKeyboard(taskId) {
+  return {
+    inline_keyboard: [[{ text: '🗑 Удалить', callback_data: `${CB_TASK_DEL_PREFIX}${taskId}` }]],
+  };
 }
 
 function peopleByKeys(keys) {
@@ -1068,8 +1149,7 @@ async function beginCapture(chatId) {
 }
 
 async function showDraftPreview(chatId, draft) {
-  // Убираем гайд / «слушаю» — до кнопки только расшифровка/текст + кнопки
-  await purgeEphemeral(chatId);
+  // Не чистим здесь — все промежуточные (вкл. «Пришли текст») удалим после Создать/Отменить
   const prev = sessions.get(chatId);
   sessions.set(chatId, { step: 'preview', draft, ...(prev?.title ? { title: prev.title } : {}) });
   await replyEphemeral(chatId, formatConfirmPreview(draft), {
@@ -1180,7 +1260,8 @@ async function createFromDraft(chatId, draft) {
     creatorText,
   });
 
-  const notify = await notifyGroup(html);
+  const notify = await notifyGroup(html, { reply_markup: createdTaskKeyboard(task.id) });
+  rememberTaskMessages(task.id, notify.messages || []);
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
   const notifyLine = notify.ok
     ? 'В группу отправил'
@@ -1189,7 +1270,7 @@ async function createFromDraft(chatId, draft) {
   await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
 
-  await reply(
+  const dmMsg = await reply(
     chatId,
     formatCreatedReply({
       code: task.idTaskProject || '',
@@ -1200,8 +1281,11 @@ async function createFromDraft(chatId, draft) {
       notifyLine,
       link,
     }),
-    { reply_markup: mainKeyboard() },
+    { reply_markup: createdTaskKeyboard(task.id) },
   );
+  rememberTaskMessages(task.id, [
+    { chatId: String(chatId), messageId: dmMsg?.message_id },
+  ]);
 
   return { task, notify };
 }
@@ -1609,6 +1693,47 @@ async function handleCallbackQuery(cq) {
     return;
   }
   rememberTelegramUser(from);
+
+  if (String(data).startsWith(CB_TASK_DEL_PREFIX)) {
+    const taskId = String(data).slice(CB_TASK_DEL_PREFIX.length).trim();
+    try {
+      if (taskId) await deleteYougileTask(taskId);
+      const msgs = takeTaskMessages(taskId);
+      // текущее сообщение (кнопка) тоже
+      if (cq.message?.message_id != null) {
+        msgs.push({ chatId: String(chatId), messageId: cq.message.message_id });
+      }
+      for (const m of msgs) {
+        await deleteTgMessage(m.chatId, m.messageId);
+      }
+      // убрать задачу из локального state синка
+      try {
+        const state = loadState();
+        if (state.tasks?.[taskId]) {
+          delete state.tasks[taskId];
+          writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
+        }
+      } catch {
+        /* ignore */
+      }
+      await tg('answerCallbackQuery', {
+        callback_query_id: cq.id,
+        text: 'Удалено из YouGile и чатов',
+      });
+    } catch (e) {
+      console.error('task delete', e);
+      try {
+        await tg('answerCallbackQuery', {
+          callback_query_id: cq.id,
+          text: `Не удалось: ${e.message}`.slice(0, 180),
+          show_alert: true,
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
+  }
 
   try {
     await tg('answerCallbackQuery', { callback_query_id: cq.id });
