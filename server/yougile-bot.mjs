@@ -33,7 +33,42 @@ const BTN_NEW = '➕ Новая задача';
 const BTN_SYNC = '🔄 Проверить YouGile';
 const BTN_CANCEL = '❌ Отмена';
 
-/** @type {Map<number, { step: string, title?: string }>} */
+const CB_CREATE = 'draft:create';
+const CB_EDIT = 'draft:edit';
+const CB_CANCEL = 'draft:cancel';
+
+/** Подсказки: что говорить, чтобы бот разложил по полям. */
+const STRUCTURE_GUIDE =
+  '<b>Структура задачи (Sandbox)</b>\n\n' +
+  'Говори / пиши примерно так — можно минуту подряд, я разложу по блокам:\n\n' +
+  '1. <b>Название</b> — одной фразой, что чиним / делаем\n' +
+  '   <i>«Пуши по оплате не приходят в TestFlight»</i>\n\n' +
+  '2. <b>Тип</b> — скажи явно:\n' +
+  '   Баг · Доработка UI · Новая фича · Инфраструктура · B2B · Релиз · Аналитика\n\n' +
+  '3. <b>Контекст</b> — где всплыло, кого касается, фон\n' +
+  '   <i>«На созвоне с Рауфом, проявляется после склейки сборки…»</i>\n\n' +
+  '4. <b>Как сейчас</b> — что ломается / как ведёт себя сейчас\n' +
+  '   подсказки: <i>сейчас…, проблема в том, что…, не работает…</i>\n\n' +
+  '5. <b>Как надо</b> — желаемый результат\n' +
+  '   подсказки: <i>надо чтобы…, хотим…, должно…</i>\n\n' +
+  '6. <b>Технически</b> — где копать, стек, кто\n' +
+  '   подсказки: <i>технически…, на бэке…, в API…, Рашид / Рауф…</i>\n\n' +
+  'Можно не по порядку — ключевые слова помогут. Потом покажу черновик: создать / изменить / отменить.';
+
+/**
+ * @typedef {{
+ *   title: string,
+ *   type: string,
+ *   context: string,
+ *   asNow: string,
+ *   asShould: string,
+ *   tech: string,
+ *   source: string,
+ *   raw: string,
+ * }} TaskDraft
+ */
+
+/** @type {Map<number, { step: string, title?: string, draft?: TaskDraft }>} */
 const sessions = new Map();
 
 function env(name, fallback = '') {
@@ -300,77 +335,286 @@ function rememberTaskInState(task, board, column) {
   writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
 }
 
+function draftKeyboard() {
+  return {
+    inline_keyboard: [
+      [{ text: '✅ Создать задачу', callback_data: CB_CREATE }],
+      [
+        { text: '✏️ Изменить текст', callback_data: CB_EDIT },
+        { text: '❌ Отменить', callback_data: CB_CANCEL },
+      ],
+    ],
+  };
+}
+
+function dash(v) {
+  const s = String(v || '').trim();
+  return s || '—';
+}
+
+function formatDraftPreview(draft) {
+  const cut = (s, n = 900) => {
+    const t = dash(s);
+    return t.length > n ? `${t.slice(0, n)}…` : t;
+  };
+  return (
+    '<b>📋 Черновик → Sandbox</b>\n' +
+    '<i>Проверь и нажми кнопку ниже</i>\n\n' +
+    `<b>Название:</b> ${escapeHtml(dash(draft.title))}\n\n` +
+    `<b>Тип:</b> ${escapeHtml(dash(draft.type))}\n\n` +
+    `<b>Контекст:</b>\n${escapeHtml(cut(draft.context))}\n\n` +
+    `<b>Как сейчас:</b>\n${escapeHtml(cut(draft.asNow))}\n\n` +
+    `<b>Как надо:</b>\n${escapeHtml(cut(draft.asShould))}\n\n` +
+    `<b>Технически:</b>\n${escapeHtml(cut(draft.tech))}\n\n` +
+    `<b>Источник:</b> ${escapeHtml(dash(draft.source))}`
+  );
+}
+
+function buildTemplateDescription(draft) {
+  const p = (label, value) =>
+    `<p><b>${escapeHtml(label)}</b></p><p>${escapeHtml(dash(value)).replace(/\n/g, '<br/>')}</p>`;
+  return (
+    p('Тип', draft.type) +
+    p('Контекст', draft.context) +
+    p('Как сейчас', draft.asNow) +
+    p('Как надо', draft.asShould) +
+    p('Технически', draft.tech) +
+    p('Источник', draft.source) +
+    `<p>#${MARKER}</p>`
+  );
+}
+
+function guessType(text) {
+  const t = text.toLowerCase();
+  if (/баг|не работает|лома|багфикс|пуш(и|ей)? не|не приход/.test(t)) return 'Баг';
+  if (/инфраструктур|сервер|api.?нагруз|деплой|docker|бд\b|база/.test(t)) return 'Инфраструктура';
+  if (/\bb2b\b|продаж|рассылк|парсер instagram|венчур/.test(t)) return 'B2B / ops';
+  if (/\bрелиз\b|выклад(ка|ывать)|в сторы/.test(t)) return 'Релиз';
+  if (/метрик|аналитик|счётчик|счита/.test(t)) return 'Баг / аналитика';
+  if (/ui|витрин|сетк|экран|дизайн|адаптив/.test(t)) return 'Доработка UI';
+  if (/новая фич|хотим сделать|добавить функционал/.test(t)) return 'Новая фича';
+  if (/доработ/.test(t)) return 'Доработка';
+  return 'Уточнить';
+}
+
+function firstSentence(text) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!t) return 'Без названия';
+  const m = t.match(/^(.{8,140}?[.!?…])(\s|$)/u);
+  let title = (m?.[1] || t.split(/[.!?…]/)[0] || t).trim();
+  if (title.length > 120) title = `${title.slice(0, 117)}…`;
+  return title;
+}
+
+/**
+ * Разбор свободного текста/голоса в нашу структуру.
+ * Сначала явные маркеры («тип:», «как сейчас»), потом эвристики по фразам.
+ */
+export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
+  const text = String(raw || '').trim();
+  if (!text) {
+    return {
+      title: 'Без названия',
+      type: 'Уточнить',
+      context: '—',
+      asNow: '—',
+      asShould: '—',
+      tech: '—',
+      source,
+      raw: '',
+    };
+  }
+
+  const labeled = {};
+  // Порядок важен: сначала длинные фразы
+  const labelNames =
+    'название|заголовок|как сейчас|как надо|как должно|контекст|технически|техн\\.?|источник|тип|проблема|сейчас|надо';
+  const findRe = new RegExp(`(?:^|[.\\n;!?]|\\s)(${labelNames})\\s*[:\\-–—]\\s*`, 'gi');
+  const found = [];
+  let m;
+  while ((m = findRe.exec(text))) {
+    found.push({
+      key: m[1].toLowerCase(),
+      start: m.index + m[0].length,
+      labelAt: m.index,
+    });
+  }
+  found.sort((a, b) => a.start - b.start);
+  for (let i = 0; i < found.length; i++) {
+    const end = i + 1 < found.length ? found[i + 1].labelAt : text.length;
+    const val = text
+      .slice(found[i].start, end)
+      .trim()
+      .replace(/[.\s]+$/u, '')
+      .trim();
+    if (!val) continue;
+    const k = found[i].key;
+    if (/название|заголовок/.test(k)) labeled.title = val;
+    else if (k === 'тип') labeled.type = val;
+    else if (k === 'контекст') labeled.context = val;
+    else if (/как сейчас|проблема|сейчас/.test(k)) labeled.asNow = val;
+    else if (/как надо|как должно|^надо$/.test(k)) labeled.asShould = val;
+    else if (/технически|техн/.test(k)) labeled.tech = val;
+    else if (k === 'источник') labeled.source = val;
+  }
+
+  const sectionSplit =
+    /\b(?:тип|контекст|как сейчас|как надо|как должно|технически|источник)\s*[:\-–—]|\bсейчас[,:\s]|\bнадо(?:\s+чтобы)?\b|\bтехнически\b/i;
+
+  const pickAfter = (patterns) => {
+    for (const pat of patterns) {
+      const mm = text.match(pat);
+      if (!mm) continue;
+      let chunk = (mm[1] || '').trim();
+      const cut = chunk.search(sectionSplit);
+      if (cut > 0) chunk = chunk.slice(0, cut);
+      chunk = chunk.replace(/\s+/g, ' ').trim().replace(/[.\s]+$/u, '');
+      if (chunk.length > 3) return chunk;
+    }
+    return '';
+  };
+
+  if (!labeled.asNow) {
+    labeled.asNow = pickAfter([
+      /как сейчас[:\s—–-]*(.+)/i,
+      /сейчас[,:\s]+(.+)/i,
+      /проблема(?:\s+в том)?,?\s*(?:что)?[:\s]*(.+)/i,
+      /не работает[:\s]*(.+)/i,
+    ]);
+  }
+  if (!labeled.asShould) {
+    labeled.asShould = pickAfter([
+      /как надо[:\s—–-]*(.+)/i,
+      /надо(?:\s+чтобы)?[:\s]*(.+)/i,
+      /хотим[,:\s]+(.+)/i,
+      /должно(?:\s+быть)?[:\s]*(.+)/i,
+    ]);
+  }
+  if (!labeled.tech) {
+    labeled.tech = pickAfter([
+      /технически[:\s—–-]*(.+)/i,
+      /на бэке[:\s]*(.+)/i,
+      /в api[:\s]*(.+)/i,
+    ]);
+  }
+  if (!labeled.context) {
+    const cutAt = text.search(
+      /\b(как сейчас|как надо|технически|сейчас[,:\s]|надо(?:\s+чтобы)?)\b/i,
+    );
+    labeled.context = (cutAt > 20 ? text.slice(0, cutAt) : text).replace(/\s+/g, ' ').trim();
+  }
+
+  const title = (labeled.title || firstSentence(text)).slice(0, 200);
+  return {
+    title,
+    type: labeled.type || guessType(text),
+    context: labeled.context || text,
+    asNow: labeled.asNow || '—',
+    asShould: labeled.asShould || '—',
+    tech: labeled.tech || '—',
+    source: labeled.source || source,
+    raw: text,
+  };
+}
+
+/** Optional LLM refine when OPENAI_API_KEY set. */
+async function refineDraftWithOpenAI(draft) {
+  const key = env('OPENAI_API_KEY');
+  if (!key || !draft.raw) return draft;
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: env('OPENAI_STRUCTURE_MODEL', 'gpt-4o-mini'),
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content:
+              'Ты помощник Taneesh. Разложи текст задачи на JSON поля: title, type, context, asNow, asShould, tech. ' +
+              'type — коротко (Баг, Доработка UI, Новая фича, Инфраструктура, B2B / ops, Релиз, Баг / аналитика, Уточнить). ' +
+              'Пиши по-русски, без воды. Если поля нет — "—".',
+          },
+          { role: 'user', content: draft.raw },
+        ],
+      }),
+    });
+    if (!r.ok) return draft;
+    const data = await r.json();
+    const raw = data.choices?.[0]?.message?.content || '';
+    const parsed = JSON.parse(raw);
+    return {
+      ...draft,
+      title: String(parsed.title || draft.title).slice(0, 200),
+      type: String(parsed.type || draft.type),
+      context: String(parsed.context || draft.context),
+      asNow: String(parsed.asNow || draft.asNow),
+      asShould: String(parsed.asShould || draft.asShould),
+      tech: String(parsed.tech || draft.tech),
+    };
+  } catch (e) {
+    console.error('refineDraft', e.message);
+    return draft;
+  }
+}
+
 async function handleStart(chatId) {
   sessions.delete(chatId);
   await reply(
     chatId,
     '<b>Taneesh YouGile</b>\n\n' +
-      '• <b>Новая задача</b> — карточка в Sandbox → Нераспределённое + пуш в группу\n' +
-      '• <b>Голосовое</b> — расшифрую и создам по шаблону в Sandbox\n' +
-      '• <b>Проверить YouGile</b> — сверка переносов/удалений\n\n' +
-      'Или просто пришли текст / войсик — это станет задачей.',
+      '• <b>Новая задача</b> — сначала структура, потом черновик с кнопками\n' +
+      '• Текст или войсик → разбор по полям → <b>Создать / Изменить / Отменить</b>\n' +
+      '• Всё падает в <b>Sandbox → Нераспределённое</b>, без авто-разноса\n\n' +
+      STRUCTURE_GUIDE,
     { reply_markup: mainKeyboard() },
   );
 }
 
-/** Title = first sentence / line; rest goes to description body. */
-export function parseVoiceToTask(transcript) {
-  const text = String(transcript || '').replace(/\s+/g, ' ').trim();
-  if (!text) return { title: 'Голосовая задача', body: '' };
-
-  const sentenceMatch = text.match(/^(.{8,160}?[.!?…])(\s|$)/u);
-  const lineMatch = text.split(/\n/)[0];
-  let title = (sentenceMatch?.[1] || lineMatch || text).trim();
-  if (title.length > 120) title = `${title.slice(0, 117)}…`;
-  const body = text === title ? text : text;
-  return { title, body };
-}
-
-function buildTemplateDescription({ body, source = 'Telegram', type = 'Из голоса / уточнить' }) {
-  const safeBody = escapeHtml(body || '—').replace(/\n/g, '<br/>');
-  return (
-    `<p><b>Тип</b></p><p>${escapeHtml(type)}</p>` +
-    `<p><b>Контекст</b></p><p>${safeBody}</p>` +
-    `<p><b>Как сейчас</b></p><p>—</p>` +
-    `<p><b>Как надо</b></p><p>—</p>` +
-    `<p><b>Технически</b></p><p>—</p>` +
-    `<p><b>Источник</b></p><p>${escapeHtml(source)}</p>` +
-    `<p>#${MARKER}</p>`
+async function beginCapture(chatId) {
+  sessions.set(chatId, { step: 'await_input' });
+  await reply(
+    chatId,
+    STRUCTURE_GUIDE +
+      '\n\n⬇️ <b>Пришли текст или голосовое</b> — сначала покажу черновик, создам только после кнопки.',
+    { reply_markup: cancelKeyboard() },
   );
 }
 
-async function createFromText(chatId, title, description = '', { fromVoice = false, transcript = '' } = {}) {
+async function showDraftPreview(chatId, draft) {
+  sessions.set(chatId, { step: 'preview', draft });
+  await reply(chatId, formatDraftPreview(draft), {
+    reply_markup: draftKeyboard(),
+  });
+}
+
+async function ingestRawInput(chatId, raw, { source = 'Telegram' } = {}) {
+  await reply(chatId, '🧠 Раскладываю по структуре…');
+  let draft = structureTaskFromText(raw, { source });
+  draft = await refineDraftWithOpenAI(draft);
+  await showDraftPreview(chatId, draft);
+}
+
+async function createFromDraft(chatId, draft) {
   const boards = await fetchBoards();
   const place = pickSandboxColumn(boards);
-
-  let descHtml;
-  if (fromVoice) {
-    descHtml = buildTemplateDescription({
-      body: transcript || description,
-      source: 'Telegram · голосовое',
-      type: 'Из голоса / уточнить',
-    });
-  } else if (description) {
-    descHtml =
-      `<p>${escapeHtml(description).replace(/\n/g, '<br/>')}</p>` +
-      `<p><b>Источник</b></p><p>Telegram</p>` +
-      `<p>#${MARKER}</p>`;
-  } else {
-    descHtml =
-      `<p></p><p><b>Источник</b></p><p>Telegram</p><p>#${MARKER}</p>`;
-  }
+  const descHtml = buildTemplateDescription(draft);
 
   const task = await createYougileTask({
-    title: title.trim().slice(0, 200),
+    title: draft.title.trim().slice(0, 200),
     descriptionHtml: descHtml,
     columnId: place.columnId,
   });
 
-  // В state ДО пуша — poll не задвоит «Создание»
   rememberTaskInState(task, place.board, place.column);
 
   const html = formatCreateNotify({
-    title: task.title || title,
+    title: task.title || draft.title,
     code: task.idTaskProject || '',
     taskId: task.id,
     board: place.board,
@@ -380,17 +624,15 @@ async function createFromText(chatId, title, description = '', { fromVoice = fal
   });
 
   const notify = await notifyGroup(html);
-  // Если юзер писал не из группы — дублируем пуш ему не нужно (уже reply ниже).
-  // Если писали из другого чата и группа не приняла — скажем явно.
-
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
   const notifyLine = notify.ok
     ? '📣 В группу отправил.'
     : `⚠️ Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
 
+  sessions.delete(chatId);
   await reply(
     chatId,
-    `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || title)}\n` +
+    `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || draft.title)}\n` +
       `${escapeHtml(place.board)} / ${escapeHtml(place.column)}\n` +
       `${notifyLine}\n` +
       `<a href="${link}">Открыть в YouGile</a>`,
@@ -713,12 +955,11 @@ async function handleVoice(chatId, msg) {
     local = await downloadTelegramFile(voice.file_id);
     const transcript = await transcribeVoiceFile(local);
     if (!transcript) throw new Error('Пустая расшифровка');
-    const { title, body } = parseVoiceToTask(transcript);
     await reply(
       chatId,
-      `📝 Расшифровка:\n<i>${escapeHtml(transcript.slice(0, 1500))}</i>\n\nСоздаю в Sandbox…`,
+      `📝 Расшифровка:\n<i>${escapeHtml(transcript.slice(0, 1500))}</i>`,
     );
-    await createFromText(chatId, title, body, { fromVoice: true, transcript: body });
+    await ingestRawInput(chatId, transcript, { source: 'Telegram · голосовое' });
   } catch (e) {
     console.error('voice', e);
     await reply(chatId, `Не смог обработать голосовое: ${escapeHtml(e.message)}`, {
@@ -735,7 +976,61 @@ async function handleVoice(chatId, msg) {
   }
 }
 
+async function handleCallbackQuery(cq) {
+  const chatId = cq.message?.chat?.id;
+  const data = String(cq.data || '');
+  if (chatId == null) return;
+
+  try {
+    await tg('answerCallbackQuery', { callback_query_id: cq.id });
+  } catch {
+    /* ignore */
+  }
+
+  const session = sessions.get(chatId);
+
+  if (data === CB_CANCEL) {
+    sessions.delete(chatId);
+    await reply(chatId, 'Ок, черновик отменил.', { reply_markup: mainKeyboard() });
+    return;
+  }
+
+  if (data === CB_EDIT) {
+    const draft = session?.draft;
+    sessions.set(chatId, { step: 'edit', draft });
+    await reply(
+      chatId,
+      'Пришли <b>новый текст или голосовое</b> — пересоберу структуру.\n\n' + STRUCTURE_GUIDE,
+      { reply_markup: cancelKeyboard() },
+    );
+    return;
+  }
+
+  if (data === CB_CREATE) {
+    if (!session?.draft) {
+      await reply(chatId, 'Черновик потерялся. Пришли текст/войсик ещё раз.', {
+        reply_markup: mainKeyboard(),
+      });
+      return;
+    }
+    try {
+      await reply(chatId, '⏳ Создаю в Sandbox…');
+      await createFromDraft(chatId, session.draft);
+    } catch (e) {
+      console.error(e);
+      await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
+        reply_markup: mainKeyboard(),
+      });
+    }
+  }
+}
+
 export async function handleYougileUpdate(update) {
+  if (update.callback_query) {
+    await handleCallbackQuery(update.callback_query);
+    return { ok: true, callback: true };
+  }
+
   const msg = update.message || update.edited_message;
   if (!msg?.chat) return { ok: true, ignored: true };
 
@@ -744,33 +1039,6 @@ export async function handleYougileUpdate(update) {
   const session = sessions.get(chatId);
 
   if (msg.voice || msg.audio || msg.video_note) {
-    // В визарде «описание» — войсик только как текст описания
-    if (session?.step === 'desc' && session.title) {
-      await reply(chatId, '🎤 Расшифровываю описание…');
-      let local;
-      try {
-        const voice = msg.voice || msg.audio || msg.video_note;
-        local = await downloadTelegramFile(voice.file_id);
-        const transcript = await transcribeVoiceFile(local);
-        sessions.delete(chatId);
-        await createFromText(chatId, session.title, transcript);
-      } catch (e) {
-        console.error(e);
-        await reply(chatId, `Не удалось: ${escapeHtml(e.message)}`, {
-          reply_markup: mainKeyboard(),
-        });
-      } finally {
-        if (local) {
-          try {
-            unlinkSync(local);
-          } catch {
-            /* ignore */
-          }
-        }
-      }
-      return { ok: true, voice: true };
-    }
-    sessions.delete(chatId);
     await handleVoice(chatId, msg);
     return { ok: true, voice: true };
   }
@@ -795,33 +1063,19 @@ export async function handleYougileUpdate(update) {
   }
 
   if (text === BTN_NEW || text === '/new') {
-    sessions.set(chatId, { step: 'title' });
-    await reply(chatId, 'Напиши <b>название</b> задачи (или пришли голосовое):', {
-      reply_markup: cancelKeyboard(),
-    });
+    await beginCapture(chatId);
     return { ok: true };
   }
 
-  if (session?.step === 'title') {
-    sessions.set(chatId, { step: 'desc', title: text });
-    await reply(
-      chatId,
-      'Название принял. Теперь <b>описание</b> (или «-» / «без описания» / голосовое):',
-      { reply_markup: cancelKeyboard() },
-    );
-    return { ok: true };
-  }
-
-  if (session?.step === 'desc') {
-    const title = session.title || text;
-    const desc =
-      text === '-' || /^без\s*описан/i.test(text) || text === '—' ? '' : text;
-    sessions.delete(chatId);
+  // Редактирование черновика или любой входящий текст → структура → превью
+  if (session?.step === 'edit' || session?.step === 'await_input' || session?.step === 'preview') {
     try {
-      await createFromText(chatId, title, desc);
+      await ingestRawInput(chatId, text, {
+        source: session?.draft?.source || 'Telegram',
+      });
     } catch (e) {
       console.error(e);
-      await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
+      await reply(chatId, `Не удалось разобрать: ${escapeHtml(e.message)}`, {
         reply_markup: mainKeyboard(),
       });
     }
@@ -830,10 +1084,11 @@ export async function handleYougileUpdate(update) {
 
   if (!text.startsWith('/')) {
     try {
-      await createFromText(chatId, text, '');
+      // Сразу в превью; если человек не видел структуру — короткая подсказка уже была в /start
+      await ingestRawInput(chatId, text, { source: 'Telegram' });
     } catch (e) {
       console.error(e);
-      await reply(chatId, `Не удалось создать: ${escapeHtml(e.message)}`, {
+      await reply(chatId, `Не удалось разобрать: ${escapeHtml(e.message)}`, {
         reply_markup: mainKeyboard(),
       });
     }
@@ -853,7 +1108,11 @@ export async function setupYougileBotWebhook(publicBaseUrl) {
   const r = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ url, drop_pending_updates: false }),
+    body: JSON.stringify({
+      url,
+      drop_pending_updates: false,
+      allowed_updates: ['message', 'callback_query'],
+    }),
   });
   const data = await r.json();
   console.log('yougile bot webhook', url, data);

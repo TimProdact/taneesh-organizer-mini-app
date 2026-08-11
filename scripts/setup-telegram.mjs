@@ -103,7 +103,7 @@ if (ygToken) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       url: ygHook,
-      allowed_updates: ['message'],
+      allowed_updates: ['message', 'callback_query'],
       drop_pending_updates: false,
     }),
   });
@@ -114,8 +114,8 @@ if (ygToken) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       commands: [
-        { command: 'start', description: 'Меню' },
-        { command: 'new', description: 'Новая задача в Inbox' },
+        { command: 'start', description: 'Меню и структура задачи' },
+        { command: 'new', description: 'Новая задача в Sandbox' },
         { command: 'sync', description: 'Проверить YouGile сейчас' },
         { command: 'cancel', description: 'Отмена' },
       ],

@@ -59,7 +59,7 @@ async function loop() {
   await tg('setMyCommands', {
     commands: [
       { command: 'start', description: 'Меню' },
-      { command: 'new', description: 'Новая задача в Inbox' },
+      { command: 'new', description: 'Новая задача в Sandbox' },
       { command: 'sync', description: 'Проверить YouGile сейчас' },
       { command: 'cancel', description: 'Отмена' },
     ],
@@ -72,7 +72,7 @@ async function loop() {
       const data = await tg('getUpdates', {
         offset,
         timeout: 50,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
       });
       if (!data.ok) {
         console.error('getUpdates', data);
