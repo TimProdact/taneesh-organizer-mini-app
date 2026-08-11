@@ -459,7 +459,7 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
   }
 
   const sectionSplit =
-    /\b(?:тип|контекст|как сейчас|как надо|как должно|технически|источник)\s*[:\-–—]|\bсейчас[,:\s]|\bнадо(?:\s+чтобы)?\b|\bтехнически\b/i;
+    /\b(?:тип|контекст|как сейчас|как надо|как должно|технически|источник)\s*[:\-–—]|\bсейчас(?=[,:\s])|\bнадо(?:\s+чтобы)?\b|\bтехнически\b/i;
 
   const pickAfter = (patterns) => {
     for (const pat of patterns) {
@@ -477,7 +477,7 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
   if (!labeled.asNow) {
     labeled.asNow = pickAfter([
       /как сейчас[:\s—–-]*(.+)/i,
-      /сейчас[,:\s]+(.+)/i,
+      /сейчас(?=[,:\s])[,:\s]+(.+)/i,
       /проблема(?:\s+в том)?,?\s*(?:что)?[:\s]*(.+)/i,
       /не работает[:\s]*(.+)/i,
     ]);
@@ -499,7 +499,7 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
   }
   if (!labeled.context) {
     const cutAt = text.search(
-      /\b(как сейчас|как надо|технически|сейчас[,:\s]|надо(?:\s+чтобы)?)\b/i,
+      /\b(?:как сейчас|как надо|технически)\b|\bсейчас(?=[,:\s])|\bнадо(?:\s+чтобы)?\b/i,
     );
     labeled.context = (cutAt > 20 ? text.slice(0, cutAt) : text).replace(/\s+/g, ' ').trim();
   }
