@@ -938,8 +938,14 @@ async function transcribeWithGroq(filePath) {
   const key = env('GROQ_API_KEY');
   if (!key) return null;
   const buf = readFileSync(filePath);
+  // Telegram voice = *.oga; Groq принимает только whitelist расширений (ogg/opus/…), не .oga
+  let name = filePath.split('/').pop() || 'voice.ogg';
+  if (/\.oga$/i.test(name)) name = name.replace(/\.oga$/i, '.ogg');
+  if (!/\.(flac|mp3|mp4|mpeg|mpga|m4a|ogg|opus|wav|webm)$/i.test(name)) {
+    name = `${name}.ogg`;
+  }
   const form = new FormData();
-  form.append('file', new Blob([buf]), filePath.split('/').pop() || 'voice.ogg');
+  form.append('file', new File([buf], name, { type: 'audio/ogg' }));
   form.append('model', env('GROQ_WHISPER_MODEL', 'whisper-large-v3-turbo'));
   form.append('language', 'ru');
   form.append('response_format', 'json');
@@ -1015,22 +1021,33 @@ async function transcribeWithLocalWhisper(filePath) {
 }
 
 async function transcribeVoiceFile(filePath) {
+  const errors = [];
   try {
     const groq = await transcribeWithGroq(filePath);
     if (groq) return groq;
+    if (!env('GROQ_API_KEY')) errors.push('нет GROQ_API_KEY');
   } catch (e) {
     console.error('groq whisper', e.message);
+    errors.push(e.message);
   }
   try {
     const openai = await transcribeWithOpenAI(filePath);
     if (openai) return openai;
   } catch (e) {
     console.error('openai whisper', e.message);
+    errors.push(e.message);
   }
-  const local = await transcribeWithLocalWhisper(filePath);
-  if (local) return local;
+  try {
+    const local = await transcribeWithLocalWhisper(filePath);
+    if (local) return local;
+  } catch (e) {
+    console.error('local whisper', e.message);
+    errors.push(e.message);
+  }
   throw new Error(
-    'Нет расшифровки: добавь GROQ_API_KEY (бесплатно: console.groq.com) или OPENAI_API_KEY',
+    errors.length
+      ? `Нет расшифровки: ${errors.join(' | ')}`
+      : 'Нет расшифровки: добавь GROQ_API_KEY (console.groq.com)',
   );
 }
 
