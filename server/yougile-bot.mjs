@@ -48,14 +48,51 @@ const STRUCTURE_GUIDE =
   '2. <b>Тип</b> — скажи явно:\n' +
   '   Баг · Доработка UI · Новая фича · Инфраструктура · B2B · Релиз · Аналитика\n\n' +
   '3. <b>Контекст</b> — где всплыло, кого касается, фон\n' +
-  '   <i>«На созвоне с Рауфом, проявляется после склейки сборки…»</i>\n\n' +
+  '   <i>«На созвоне, проявляется после склейки сборки…»</i>\n\n' +
   '4. <b>Как сейчас</b> — что ломается / как ведёт себя сейчас\n' +
   '   подсказки: <i>сейчас…, проблема в том, что…, не работает…</i>\n\n' +
   '5. <b>Как надо</b> — желаемый результат\n' +
   '   подсказки: <i>надо чтобы…, хотим…, должно…</i>\n\n' +
-  '6. <b>Технически</b> — где копать, стек, кто\n' +
-  '   подсказки: <i>технически…, на бэке…, в API…, Рашид / Рауф…</i>\n\n' +
-  'Можно не по порядку — ключевые слова помогут. Потом покажу черновик: создать / изменить / отменить.';
+  '6. <b>Технически</b> — где копать, стек\n' +
+  '   подсказки: <i>технически…, на бэке…, в API…</i>\n\n' +
+  '7. <b>Срочность</b> (стикер «Приоритет» в YouGile):\n' +
+  '   <i>критично / срочно / горит</i> → critical\n' +
+  '   <i>важно / высокий</i> → major\n' +
+  '   <i>обычно / средне</i> → normal\n' +
+  '   <i>низкий / несрочно / потом</i> → low\n\n' +
+  '8. <b>Исполнитель — в конце обязательно</b>:\n' +
+  '   скажи имя: <b>Рашид</b> и/или <b>Рауф</b> (можно обоих)\n' +
+  '   <i>«… Исполнитель: Рашид»</i> или просто в конце «Рауф»\n\n' +
+  'Потом черновик: создать / изменить / отменить.';
+
+/** YouGile user id + Telegram @ + email */
+const PEOPLE = [
+  {
+    key: 'rauf',
+    names: ['рауф', 'рауфа', 'рауфу', 'rauf', 'abdurauf'],
+    yougileId: 'f2ead94b-0bdf-4fdb-9eea-72987bdc9749',
+    email: 'abduraufcoder@gmail.com',
+    telegram: '@rauf_cc',
+    label: 'Рауф',
+  },
+  {
+    key: 'rashid',
+    names: ['рашид', 'рашида', 'рашиду', 'rashid'],
+    yougileId: '81061eb1-1547-4004-9a21-3ff871b6aa26',
+    email: 'rashid.tadjiev@gmail.com',
+    telegram: '@Marshall2221',
+    label: 'Рашид',
+  },
+];
+
+/** Стикер «Приоритет» в YouGile */
+const PRIORITY_STICKER_ID = 'e7d00330-5995-48f8-9ba9-3c90c4b22742';
+const PRIORITY_STATES = {
+  critical: { id: '8160a0fe7bfd', label: 'critical (критично)' },
+  major: { id: '9e60ccfcc6ef', label: 'major (важно)' },
+  normal: { id: '60b2aabd701d', label: 'normal (обычно)' },
+  low: { id: 'ecb62b612ad9', label: 'low (низкий)' },
+};
 
 /**
  * @typedef {{
@@ -67,6 +104,8 @@ const STRUCTURE_GUIDE =
  *   tech: string,
  *   source: string,
  *   raw: string,
+ *   assigneeKeys: string[],
+ *   priority: 'critical'|'major'|'normal'|'low',
  * }} TaskDraft
  */
 
@@ -295,13 +334,14 @@ function pickSandboxColumn(boards) {
   return { board: boardName || 'Sandbox', column, columnId };
 }
 
-async function createYougileTask({ title, descriptionHtml, columnId, assigned }) {
+async function createYougileTask({ title, descriptionHtml, columnId, assigned, stickers }) {
   const body = {
     title,
     columnId,
     description: descriptionHtml,
   };
   if (assigned?.length) body.assigned = assigned;
+  if (stickers && Object.keys(stickers).length) body.stickers = stickers;
   const r = await fetch(`${YG_API}/tasks`, {
     method: 'POST',
     headers: ygHeaders(),
@@ -312,11 +352,14 @@ async function createYougileTask({ title, descriptionHtml, columnId, assigned })
     throw new Error(`create task ${r.status}: ${t.slice(0, 200)}`);
   }
   const { id } = await r.json();
-  if (assigned?.length) {
+  const patch = {};
+  if (assigned?.length) patch.assigned = assigned;
+  if (stickers && Object.keys(stickers).length) patch.stickers = stickers;
+  if (Object.keys(patch).length) {
     await fetch(`${YG_API}/tasks/${id}`, {
       method: 'PUT',
       headers: ygHeaders(),
-      body: JSON.stringify({ assigned }),
+      body: JSON.stringify(patch),
     });
   }
   const full = await fetch(`${YG_API}/tasks/${id}`, { headers: ygHeaders() }).then((x) =>
@@ -325,17 +368,65 @@ async function createYougileTask({ title, descriptionHtml, columnId, assigned })
   return full;
 }
 
-function formatCreateNotify({ title, code, taskId, board, column, description, assigneesText }) {
+function peopleByKeys(keys) {
+  const set = new Set(keys || []);
+  return PEOPLE.filter((p) => set.has(p.key));
+}
+
+function formatAssigneesTelegram(keys) {
+  const people = peopleByKeys(keys);
+  if (!people.length) return 'не назначен';
+  return people.map((p) => `${p.label} ${p.telegram}`).join(', ');
+}
+
+function formatAssigneesPreview(keys) {
+  const people = peopleByKeys(keys);
+  if (!people.length) return 'не назначен';
+  return people.map((p) => `${p.label} (${p.telegram}, ${p.email})`).join('\n');
+}
+
+function parseAssigneesFromText(text) {
+  const lower = String(text || '').toLowerCase();
+  const keys = [];
+  for (const p of PEOPLE) {
+    if (p.names.some((n) => new RegExp(`(?<!\\p{L})${n}(?!\\p{L})`, 'iu').test(lower))) {
+      keys.push(p.key);
+    }
+  }
+  return keys;
+}
+
+function parsePriorityFromText(text) {
+  const t = String(text || '').toLowerCase();
+  if (/критич|asap|горит|пиздец|очень срочн|блокер|blocker|critical/.test(t)) return 'critical';
+  if (/срочн|важно|высок(ий|ого)?\s*приоритет|major|высокий приоритет/.test(t)) return 'major';
+  if (/несрочн|низк|потом|low|не горит|можно позже/.test(t)) return 'low';
+  if (/обычн|средн|normal|стандарт/.test(t)) return 'normal';
+  return 'normal';
+}
+
+function formatCreateNotify({
+  title,
+  code,
+  taskId,
+  board,
+  column,
+  description,
+  assigneesText,
+  priorityLabel,
+}) {
   const company = env('YOUGILE_COMPANY_ID');
   const head = code ? `<b>${escapeHtml(code)}</b> · ${escapeHtml(title)}` : `<b>${escapeHtml(title)}</b>`;
   let body = htmlToText(stripMarkerFromDesc(description));
   if (body.length > 2800) body = `${body.slice(0, 2800)}…`;
+  // @username не экранируем — Telegram подхватит упоминания
   return [
     '<b>Создание</b>',
     head,
     `${escapeHtml(board)} / ${escapeHtml(column)}`,
     '',
-    `<b>Исполнитель:</b> ${escapeHtml(assigneesText || 'не назначен')}`,
+    `<b>Приоритет:</b> ${escapeHtml(priorityLabel || 'normal')}`,
+    `<b>Исполнитель:</b> ${assigneesText || 'не назначен'}`,
     '',
     '<b>Описание:</b>',
     escapeHtml(body || '—'),
@@ -386,11 +477,14 @@ function formatDraftPreview(draft) {
     const t = dash(s);
     return t.length > n ? `${t.slice(0, n)}…` : t;
   };
+  const prio = PRIORITY_STATES[draft.priority] || PRIORITY_STATES.normal;
   return (
     '<b>📋 Черновик → Sandbox</b>\n' +
     '<i>Проверь и нажми кнопку ниже</i>\n\n' +
     `<b>Название:</b> ${escapeHtml(dash(draft.title))}\n\n` +
     `<b>Тип:</b> ${escapeHtml(dash(draft.type))}\n\n` +
+    `<b>Приоритет:</b> ${escapeHtml(prio.label)}\n\n` +
+    `<b>Исполнитель:</b>\n${escapeHtml(formatAssigneesPreview(draft.assigneeKeys))}\n\n` +
     `<b>Контекст:</b>\n${escapeHtml(cut(draft.context))}\n\n` +
     `<b>Как сейчас:</b>\n${escapeHtml(cut(draft.asNow))}\n\n` +
     `<b>Как надо:</b>\n${escapeHtml(cut(draft.asShould))}\n\n` +
@@ -402,8 +496,12 @@ function formatDraftPreview(draft) {
 function buildTemplateDescription(draft) {
   const p = (label, value) =>
     `<p><b>${escapeHtml(label)}</b></p><p>${escapeHtml(dash(value)).replace(/\n/g, '<br/>')}</p>`;
+  const prio = PRIORITY_STATES[draft.priority] || PRIORITY_STATES.normal;
+  const assignees = formatAssigneesPreview(draft.assigneeKeys);
   return (
     p('Тип', draft.type) +
+    p('Приоритет', prio.label) +
+    p('Исполнитель', assignees) +
     p('Контекст', draft.context) +
     p('Как сейчас', draft.asNow) +
     p('Как надо', draft.asShould) +
@@ -451,13 +549,15 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
       tech: '—',
       source,
       raw: '',
+      assigneeKeys: [],
+      priority: 'normal',
     };
   }
 
   const labeled = {};
   // Порядок важен: сначала длинные фразы
   const labelNames =
-    'название|заголовок|как сейчас|как надо|как должно|контекст|технически|техн\\.?|источник|тип|проблема|сейчас|надо';
+    'название|заголовок|как сейчас|как надо|как должно|контекст|технически|техн\\.?|источник|тип|проблема|сейчас|надо|исполнитель|приоритет|срочность';
   const findRe = new RegExp(`(?:^|[.\\n;!?]|\\s)(${labelNames})\\s*[:\\-–—]\\s*`, 'gi');
   const found = [];
   let m;
@@ -485,6 +585,8 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
     else if (/как надо|как должно|^надо$/.test(k)) labeled.asShould = val;
     else if (/технически|техн/.test(k)) labeled.tech = val;
     else if (k === 'источник') labeled.source = val;
+    else if (k === 'исполнитель') labeled.assigneesRaw = val;
+    else if (/приоритет|срочность/.test(k)) labeled.priorityRaw = val;
   }
 
   // \b в JS не работает с кириллицей — границы через \p{L}
@@ -535,6 +637,15 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
   }
 
   const title = (labeled.title || firstSentence(text)).slice(0, 200);
+  const assigneeKeys = [
+    ...new Set([
+      ...parseAssigneesFromText(text),
+      ...parseAssigneesFromText(labeled.assigneesRaw || ''),
+    ]),
+  ];
+  const priority = labeled.priorityRaw
+    ? parsePriorityFromText(labeled.priorityRaw)
+    : parsePriorityFromText(text);
   return {
     title,
     type: labeled.type || guessType(text),
@@ -544,6 +655,8 @@ export function structureTaskFromText(raw, { source = 'Telegram' } = {}) {
     tech: labeled.tech || '—',
     source: labeled.source || source,
     raw: text,
+    assigneeKeys,
+    priority,
   };
 }
 
@@ -558,8 +671,11 @@ async function refineDraftWithLlm(draft) {
     {
       role: 'system',
       content:
-        'Ты помощник Taneesh. Разложи текст задачи на JSON поля: title, type, context, asNow, asShould, tech. ' +
+        'Ты помощник Taneesh. Разложи текст задачи на JSON поля: ' +
+        'title, type, context, asNow, asShould, tech, assignees, priority. ' +
         'type — коротко (Баг, Доработка UI, Новая фича, Инфраструктура, B2B / ops, Релиз, Баг / аналитика, Уточнить). ' +
+        'assignees — массив из ключей: только "rauf" и/или "rashid" (по именам Рауф/Рашид в тексте). Если не сказано — []. ' +
+        'priority — одно из: critical, major, normal, low (срочность/приоритет). ' +
         'Пиши по-русски, без воды. Если поля нет — "—". Верни только JSON.',
     },
     { role: 'user', content: draft.raw },
@@ -607,6 +723,12 @@ async function refineDraftWithLlm(draft) {
     }
     const raw = data?.choices?.[0]?.message?.content || '';
     const parsed = JSON.parse(raw);
+    let assigneeKeys = Array.isArray(parsed.assignees)
+      ? parsed.assignees.map(String).filter((k) => k === 'rauf' || k === 'rashid')
+      : [];
+    if (!assigneeKeys.length) assigneeKeys = draft.assigneeKeys || [];
+    let priority = String(parsed.priority || draft.priority || 'normal').toLowerCase();
+    if (!PRIORITY_STATES[priority]) priority = draft.priority || 'normal';
     return {
       ...draft,
       title: String(parsed.title || draft.title).slice(0, 200),
@@ -615,6 +737,8 @@ async function refineDraftWithLlm(draft) {
       asNow: String(parsed.asNow || draft.asNow),
       asShould: String(parsed.asShould || draft.asShould),
       tech: String(parsed.tech || draft.tech),
+      assigneeKeys,
+      priority,
     };
   } catch (e) {
     console.error('refineDraft', e.message);
@@ -663,15 +787,24 @@ async function createFromDraft(chatId, draft) {
   const boards = await fetchBoards();
   const place = pickSandboxColumn(boards);
   const descHtml = buildTemplateDescription(draft);
+  const people = peopleByKeys(draft.assigneeKeys);
+  const assigned = people.map((p) => p.yougileId);
+  const priority = PRIORITY_STATES[draft.priority] ? draft.priority : 'normal';
+  const stickers = {
+    [PRIORITY_STICKER_ID]: PRIORITY_STATES[priority].id,
+  };
 
   const task = await createYougileTask({
     title: draft.title.trim().slice(0, 200),
     descriptionHtml: descHtml,
     columnId: place.columnId,
+    assigned,
+    stickers,
   });
 
   rememberTaskInState(task, place.board, place.column);
 
+  const assigneesText = formatAssigneesTelegram(draft.assigneeKeys);
   const html = formatCreateNotify({
     title: task.title || draft.title,
     code: task.idTaskProject || '',
@@ -679,7 +812,8 @@ async function createFromDraft(chatId, draft) {
     board: place.board,
     column: place.column,
     description: stripMarkerFromDesc(task.description || descHtml),
-    assigneesText: 'не назначен',
+    assigneesText,
+    priorityLabel: PRIORITY_STATES[priority].label,
   });
 
   const notify = await notifyGroup(html);
@@ -693,6 +827,8 @@ async function createFromDraft(chatId, draft) {
     chatId,
     `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || draft.title)}\n` +
       `${escapeHtml(place.board)} / ${escapeHtml(place.column)}\n` +
+      `Приоритет: ${escapeHtml(PRIORITY_STATES[priority].label)}\n` +
+      `Исполнитель: ${assigneesText}\n` +
       `${notifyLine}\n` +
       `<a href="${link}">Открыть в YouGile</a>`,
     { reply_markup: mainKeyboard() },
