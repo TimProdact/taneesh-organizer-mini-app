@@ -99,10 +99,10 @@ const USERS_PATH = join(ROOT, '.yougile-bot-users.json');
 /** Стикер «Приоритет» в YouGile */
 const PRIORITY_STICKER_ID = 'e7d00330-5995-48f8-9ba9-3c90c4b22742';
 const PRIORITY_STATES = {
-  critical: { id: '8160a0fe7bfd', label: 'critical (критично)' },
-  major: { id: '9e60ccfcc6ef', label: 'major (важно)' },
-  normal: { id: '60b2aabd701d', label: 'normal (обычно)' },
-  low: { id: 'ecb62b612ad9', label: 'low (низкий)' },
+  critical: { id: '8160a0fe7bfd', label: 'critical (критично)', short: 'критично' },
+  major: { id: '9e60ccfcc6ef', label: 'major (важно)', short: 'важно' },
+  normal: { id: '60b2aabd701d', label: 'normal (обычно)', short: 'обычно' },
+  low: { id: 'ecb62b612ad9', label: 'low (низкий)', short: 'низкий' },
 };
 
 /**
@@ -579,6 +579,13 @@ function formatAssigneesPreview(keys) {
   return people.map((p) => `${p.label} (${p.telegram}, ${p.email})`).join('\n');
 }
 
+/** Короткие имена для превью в Telegram (как в гайде). */
+function formatAssigneesDraftLine(keys) {
+  const people = peopleByKeys(keys);
+  if (!people.length) return '<i>не назначен</i>';
+  return people.map((p) => `<b>${escapeHtml(p.label)}</b> ${escapeHtml(p.telegram)}`).join(' · ');
+}
+
 function parseAssigneesFromText(text) {
   const lower = String(text || '').toLowerCase();
   const keys = [];
@@ -668,24 +675,41 @@ function dash(v) {
 }
 
 function formatDraftPreview(draft) {
-  const cut = (s, n = 900) => {
+  const cut = (s, n = 700) => {
     const t = dash(s);
     return t.length > n ? `${t.slice(0, n)}…` : t;
   };
   const prio = PRIORITY_STATES[draft.priority] || PRIORITY_STATES.normal;
+  const type = dash(draft.type);
+  const typeHtml = type
+    .split(/\s*[·/,|]\s*/)
+    .filter(Boolean)
+    .map((t) => `<code>${escapeHtml(t)}</code>`)
+    .join(' · ');
+
   return (
-    '<b>📋 Черновик → Sandbox</b>\n' +
+    '<b>Черновик задачи</b>\n' +
     '<i>Проверь и нажми кнопку ниже</i>\n\n' +
-    `<b>Название:</b> ${escapeHtml(dash(draft.title))}\n\n` +
-    `<b>Тип:</b> ${escapeHtml(dash(draft.type))}\n\n` +
-    `<b>Приоритет:</b> ${escapeHtml(prio.label)}\n\n` +
-    `<b>Кто создал:</b> ${escapeHtml(formatCreatorLine(draft))}\n\n` +
-    `<b>Исполнитель:</b>\n${escapeHtml(formatAssigneesPreview(draft.assigneeKeys))}\n\n` +
-    `<b>Контекст:</b>\n${escapeHtml(cut(draft.context))}\n\n` +
-    `<b>Как сейчас:</b>\n${escapeHtml(cut(draft.asNow))}\n\n` +
-    `<b>Как надо:</b>\n${escapeHtml(cut(draft.asShould))}\n\n` +
-    `<b>Технически:</b>\n${escapeHtml(cut(draft.tech))}\n\n` +
-    `<b>Источник:</b> ${escapeHtml(dash(draft.source))}`
+    '<blockquote>' +
+    '<b>1. Название</b>\n' +
+    `<i>${escapeHtml(cut(draft.title, 200))}</i>\n\n` +
+    '<b>2. Тип</b>\n' +
+    `${typeHtml || '<i>—</i>'}\n\n` +
+    '<b>3. Контекст</b>\n' +
+    `<i>${escapeHtml(cut(draft.context))}</i>\n\n` +
+    '<b>4. Как сейчас</b>\n' +
+    `<i>${escapeHtml(cut(draft.asNow))}</i>\n\n` +
+    '<b>5. Как надо</b>\n' +
+    `<i>${escapeHtml(cut(draft.asShould))}</i>\n\n` +
+    '<b>6. Технически</b>\n' +
+    `<i>${escapeHtml(cut(draft.tech))}</i>\n\n` +
+    '<b>7. Приоритет</b>\n' +
+    `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
+    '<b>8. Исполнитель</b>\n' +
+    `${formatAssigneesDraftLine(draft.assigneeKeys)}\n` +
+    `<i>Кто создал: ${escapeHtml(formatCreatorLine(draft))}</i>` +
+    '</blockquote>\n\n' +
+    `<i>Источник: ${escapeHtml(dash(draft.source))}</i>`
   );
 }
 
