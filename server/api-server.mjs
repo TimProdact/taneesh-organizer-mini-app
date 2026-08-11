@@ -12,6 +12,12 @@ import {
   isOrganizer,
   grantOrganizer,
 } from './organizer-store.mjs';
+import {
+  handleYougileUpdate,
+  setupYougileBotWebhook,
+  yougileBotConfigured,
+  startYougilePolling,
+} from './yougile-bot.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PORT = Number(process.env.PORT || 8788);
@@ -166,6 +172,23 @@ const server = createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true });
     }
 
+    if (url.pathname === '/yougile-bot/webhook' && req.method === 'POST') {
+      const update = await readBody(req);
+      try {
+        await handleYougileUpdate(update);
+      } catch (e) {
+        console.error('yougile-bot', e);
+      }
+      return sendJson(res, 200, { ok: true });
+    }
+
+    if (url.pathname === '/yougile-bot/health' && req.method === 'GET') {
+      return sendJson(res, 200, {
+        ok: true,
+        configured: yougileBotConfigured(),
+      });
+    }
+
     if (req.method === 'GET' && (url.pathname === '/api' || url.pathname === '/health')) {
       return sendJson(res, 200, { ok: true, service: 'taneesh-organizer-api' });
     }
@@ -214,4 +237,14 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`taneesh-organizer-api on :${PORT}`);
+  const publicUrl =
+    process.env.PUBLIC_URL ||
+    process.env.RENDER_EXTERNAL_URL ||
+    'https://taneesh-organizer-api.onrender.com';
+  if (yougileBotConfigured()) {
+    setupYougileBotWebhook(publicUrl).catch((e) => console.error('yougile webhook', e));
+    startYougilePolling(60_000);
+  } else {
+    console.warn('yougile bot: missing YOUGILE_* env — skip webhook/poll');
+  }
 });

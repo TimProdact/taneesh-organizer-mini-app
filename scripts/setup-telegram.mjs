@@ -93,6 +93,38 @@ await tg('setWebhook', {
 });
 console.log('→ Webhook →', webhookUrl);
 
+// @taneesh_yougile_bot — задачи YouGile
+const ygToken = process.env.YOUGILE_TELEGRAM_BOT_TOKEN;
+if (ygToken) {
+  const ygHook = `${apiUrl.replace(/\/$/, '')}/yougile-bot/webhook`;
+  const ygApi = `https://api.telegram.org/bot${ygToken}`;
+  const ygRes = await fetch(`${ygApi}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      url: ygHook,
+      allowed_updates: ['message'],
+      drop_pending_updates: false,
+    }),
+  });
+  const ygData = await ygRes.json();
+  console.log('→ YouGile bot webhook →', ygHook, ygData.ok ? 'ok' : ygData);
+  await fetch(`${ygApi}/setMyCommands`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      commands: [
+        { command: 'start', description: 'Меню' },
+        { command: 'new', description: 'Новая задача в Inbox' },
+        { command: 'sync', description: 'Проверить YouGile сейчас' },
+        { command: 'cancel', description: 'Отмена' },
+      ],
+    }),
+  });
+} else {
+  console.warn('→ YOUGILE_TELEGRAM_BOT_TOKEN не задан — YouGile-бот пропущен');
+}
+
 // Persist URLs into .env
 let envText = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
 function upsert(key, value) {

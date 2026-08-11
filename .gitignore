@@ -8,3 +8,4 @@ mini-app/dist/
 data/*.json
 !.gitkeep
 .DS_Store
+.yougile-notify-state.json
