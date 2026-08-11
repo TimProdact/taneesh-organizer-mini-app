@@ -117,6 +117,9 @@ const PRIORITY_STATES = {
  *   raw: string,
  *   assigneeKeys: string[],
  *   priority: 'critical'|'major'|'normal'|'low',
+ *   creatorKey?: string,
+ *   creatorLabel?: string,
+ *   creatorTelegram?: string,
  * }} TaskDraft
  */
 
@@ -463,6 +466,51 @@ function peopleByKeys(keys) {
   return PEOPLE.filter((p) => set.has(p.key));
 }
 
+function resolveCreator(from) {
+  if (!from) {
+    return { key: 'unknown', label: 'Неизвестно', telegram: '' };
+  }
+  const id = Number(from.id);
+  const uname = String(from.username || '')
+    .toLowerCase()
+    .replace(/^@/, '');
+  for (const op of TEAM_OPERATORS) {
+    if (op.id != null && Number(op.id) === id) {
+      return {
+        key: op.username || String(op.id),
+        label: op.label,
+        telegram: op.username ? `@${op.username}` : '',
+      };
+    }
+    if (op.username && op.username.toLowerCase() === uname) {
+      return {
+        key: op.username,
+        label: op.label,
+        telegram: `@${op.username}`,
+      };
+    }
+  }
+  for (const p of PEOPLE) {
+    if (
+      (p.telegramId != null && Number(p.telegramId) === id) ||
+      p.telegram.replace(/^@/, '').toLowerCase() === uname
+    ) {
+      return { key: p.key, label: p.label, telegram: p.telegram };
+    }
+  }
+  return {
+    key: uname || String(id),
+    label: from.first_name || uname || String(id),
+    telegram: uname ? `@${uname}` : '',
+  };
+}
+
+function formatCreatorLine(draft) {
+  const label = draft.creatorLabel || 'Неизвестно';
+  const tg = draft.creatorTelegram || '';
+  return tg ? `${label} ${tg}` : label;
+}
+
 function formatAssigneesTelegram(keys) {
   const people = peopleByKeys(keys);
   if (!people.length) return 'не назначен';
@@ -504,18 +552,19 @@ function formatCreateNotify({
   description,
   assigneesText,
   priorityLabel,
+  creatorText,
 }) {
   const company = env('YOUGILE_COMPANY_ID');
   const head = code ? `<b>${escapeHtml(code)}</b> · ${escapeHtml(title)}` : `<b>${escapeHtml(title)}</b>`;
   let body = htmlToText(stripMarkerFromDesc(description));
   if (body.length > 2800) body = `${body.slice(0, 2800)}…`;
-  // @username не экранируем — Telegram подхватит упоминания
   return [
     '<b>Создание</b>',
     head,
     `${escapeHtml(board)} / ${escapeHtml(column)}`,
     '',
     `<b>Приоритет:</b> ${escapeHtml(priorityLabel || 'normal')}`,
+    `<b>Кто создал:</b> ${creatorText || 'неизвестно'}`,
     `<b>Исполнитель:</b> ${assigneesText || 'не назначен'}`,
     '',
     '<b>Описание:</b>',
@@ -574,6 +623,7 @@ function formatDraftPreview(draft) {
     `<b>Название:</b> ${escapeHtml(dash(draft.title))}\n\n` +
     `<b>Тип:</b> ${escapeHtml(dash(draft.type))}\n\n` +
     `<b>Приоритет:</b> ${escapeHtml(prio.label)}\n\n` +
+    `<b>Кто создал:</b> ${escapeHtml(formatCreatorLine(draft))}\n\n` +
     `<b>Исполнитель:</b>\n${escapeHtml(formatAssigneesPreview(draft.assigneeKeys))}\n\n` +
     `<b>Контекст:</b>\n${escapeHtml(cut(draft.context))}\n\n` +
     `<b>Как сейчас:</b>\n${escapeHtml(cut(draft.asNow))}\n\n` +
@@ -591,6 +641,7 @@ function buildTemplateDescription(draft) {
   return (
     p('Тип', draft.type) +
     p('Приоритет', prio.label) +
+    p('Кто создал', formatCreatorLine(draft)) +
     p('Исполнитель', assignees) +
     p('Контекст', draft.context) +
     p('Как сейчас', draft.asNow) +
@@ -866,10 +917,18 @@ async function showDraftPreview(chatId, draft) {
   });
 }
 
-async function ingestRawInput(chatId, raw, { source = 'Telegram' } = {}) {
+async function ingestRawInput(chatId, raw, { source = 'Telegram', from = null } = {}) {
   await reply(chatId, '🧠 Раскладываю по структуре…');
   let draft = structureTaskFromText(raw, { source });
+  const creator = resolveCreator(from);
+  draft.creatorKey = creator.key;
+  draft.creatorLabel = creator.label;
+  draft.creatorTelegram = creator.telegram;
   draft = await refineDraftWithLlm(draft);
+  // LLM не должен затирать creator
+  draft.creatorKey = creator.key;
+  draft.creatorLabel = creator.label;
+  draft.creatorTelegram = creator.telegram;
   await showDraftPreview(chatId, draft);
 }
 
@@ -895,6 +954,7 @@ async function createFromDraft(chatId, draft) {
   rememberTaskInState(task, place.board, place.column);
 
   const assigneesText = formatAssigneesTelegram(draft.assigneeKeys);
+  const creatorText = formatCreatorLine(draft);
   const html = formatCreateNotify({
     title: task.title || draft.title,
     code: task.idTaskProject || '',
@@ -904,6 +964,7 @@ async function createFromDraft(chatId, draft) {
     description: stripMarkerFromDesc(task.description || descHtml),
     assigneesText,
     priorityLabel: PRIORITY_STATES[priority].label,
+    creatorText,
   });
 
   const notify = await notifyGroup(html);
@@ -918,6 +979,7 @@ async function createFromDraft(chatId, draft) {
     `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || draft.title)}\n` +
       `${escapeHtml(place.board)} / ${escapeHtml(place.column)}\n` +
       `Приоритет: ${escapeHtml(PRIORITY_STATES[priority].label)}\n` +
+      `Кто создал: ${escapeHtml(creatorText)}\n` +
       `Исполнитель: ${assigneesText}\n` +
       `${notifyLine}\n` +
       `<a href="${link}">Открыть в YouGile</a>`,
@@ -1293,7 +1355,10 @@ async function handleVoice(chatId, msg) {
       chatId,
       `📝 Расшифровка:\n<i>${escapeHtml(transcript.slice(0, 1500))}</i>`,
     );
-    await ingestRawInput(chatId, transcript, { source: 'Telegram · голосовое' });
+    await ingestRawInput(chatId, transcript, {
+      source: 'Telegram · голосовое',
+      from: msg.from,
+    });
   } catch (e) {
     console.error('voice', e);
     await reply(chatId, `Не смог обработать голосовое: ${escapeHtml(e.message)}`, {
@@ -1434,6 +1499,7 @@ export async function handleYougileUpdate(update) {
     try {
       await ingestRawInput(chatId, text, {
         source: session?.draft?.source || 'Telegram',
+        from,
       });
     } catch (e) {
       console.error(e);
@@ -1446,8 +1512,7 @@ export async function handleYougileUpdate(update) {
 
   if (!text.startsWith('/')) {
     try {
-      // Сразу в превью; если человек не видел структуру — короткая подсказка уже была в /start
-      await ingestRawInput(chatId, text, { source: 'Telegram' });
+      await ingestRawInput(chatId, text, { source: 'Telegram', from });
     } catch (e) {
       console.error(e);
       await reply(chatId, `Не удалось разобрать: ${escapeHtml(e.message)}`, {
