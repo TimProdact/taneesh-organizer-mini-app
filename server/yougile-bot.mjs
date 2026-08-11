@@ -1075,35 +1075,37 @@ async function ingestRawInput(chatId, raw, { source = 'Telegram', from = null } 
   await showDraftPreview(chatId, draft);
 }
 
+function formatTranscriptReply(raw) {
+  const text = String(raw || '').trim();
+  const cut = text.length > 3500 ? `${text.slice(0, 3500)}…` : text;
+  return (
+    '<b>📝 Расшифровка</b>\n' +
+    '<i>То, что распознали из голосового</i>\n\n' +
+    '<blockquote>' +
+    `<i>${escapeHtml(cut || '—')}</i>` +
+    '</blockquote>'
+  );
+}
+
 function formatCreatedReply({
   code,
   title,
   board,
   column,
-  priority,
-  creatorText,
-  assigneeKeys,
+  draft,
   notifyLine,
   link,
 }) {
-  const prio = PRIORITY_STATES[priority] || PRIORITY_STATES.normal;
   const codeLine = code
     ? `<code>${escapeHtml(code)}</code> · <b>${escapeHtml(title || '—')}</b>`
     : `<b>${escapeHtml(title || '—')}</b>`;
   return (
     '<b>✅ Создано</b>\n' +
-    `${codeLine}\n\n` +
-    '<blockquote>' +
-    '<b>Доска</b>\n' +
+    `${codeLine}\n` +
     `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>\n\n` +
-    '<b>Приоритет</b>\n' +
-    `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
-    '<b>Кто создал</b>\n' +
-    `<i>${escapeHtml(creatorText)}</i>\n\n` +
-    '<b>Исполнитель</b>\n' +
-    `${formatAssigneesDraftLine(assigneeKeys)}` +
-    '</blockquote>\n\n' +
-    `<i>${notifyLine}</i>\n` +
+    formatTaskBlocksHtml(draft) +
+    (draft?.source ? `\n\n<i>Источник: ${escapeHtml(dash(draft.source))}</i>` : '') +
+    `\n\n<i>${notifyLine}</i>\n` +
     `<a href="${link}">Открыть в YouGile</a>`
   );
 }
@@ -1149,6 +1151,13 @@ async function createFromDraft(chatId, draft) {
 
   await purgeEphemeral(chatId);
   sessions.delete(chatId);
+
+  // Сначала расшифровка (для голосовых), потом карточка задачи 1–8
+  const isVoice = /голос/i.test(String(draft.source || ''));
+  if (isVoice && String(draft.raw || '').trim()) {
+    await reply(chatId, formatTranscriptReply(draft.raw));
+  }
+
   await reply(
     chatId,
     formatCreatedReply({
@@ -1156,9 +1165,7 @@ async function createFromDraft(chatId, draft) {
       title: task.title || title,
       board: place.board,
       column: place.column,
-      priority,
-      creatorText,
-      assigneeKeys: draft.assigneeKeys,
+      draft,
       notifyLine,
       link,
     }),
