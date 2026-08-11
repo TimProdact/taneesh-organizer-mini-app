@@ -9,3 +9,5 @@ data/*.json
 !.gitkeep
 .DS_Store
 .yougile-notify-state.json
+.yougile-tmp/
+.yougile-notify-state.json

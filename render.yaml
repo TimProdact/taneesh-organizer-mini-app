@@ -31,3 +31,7 @@ services:
         sync: false
       - key: YOUGILE_NOTIFY_BOARDS
         value: "*"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: YOUGILE_NOTIFY_THREAD_ID
+        sync: false

@@ -435,7 +435,7 @@ def sync_once(env: dict, headers: dict, boards: dict, *, quiet_new: bool) -> int
                     except Exception:
                         pass
                 # Уже запушили из Telegram-бота — не дублировать
-                if 'data-tg-bot-created' in (desc or ''):
+                if 'tg-bot-created' in (desc or ''):
                     print(
                         f"skip bot-created [{info['board']}] {info['title'][:50]}",
                         flush=True,

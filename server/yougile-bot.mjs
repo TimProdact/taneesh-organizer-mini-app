@@ -1,14 +1,33 @@
 /**
  * @taneesh_yougile_bot — create YouGile tasks from Telegram + notify group.
  * Webhook: POST /yougile-bot/webhook
+ *
+ * Env:
+ *   YOUGILE_API_KEY, YOUGILE_COMPANY_ID, YOUGILE_PROJECT_ID
+ *   YOUGILE_TELEGRAM_BOT_TOKEN
+ *   YOUGILE_TELEGRAM_CHAT_ID   — основная группа (можно несколько через запятую)
+ *   OPENAI_API_KEY             — Whisper для голосовых (опционально; иначе local whisper)
+ *   YOUGILE_NOTIFY_THREAD_ID   — topic id, если группа-форум
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+  createWriteStream,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const STATE_PATH = join(ROOT, '.yougile-notify-state.json');
+const TMP_DIR = join(ROOT, '.yougile-tmp');
 const YG_API = 'https://ru.yougile.com/api-v2';
+const MARKER = 'tg-bot-created';
 
 const BTN_NEW = '➕ Новая задача';
 const BTN_SYNC = '🔄 Проверить YouGile';
@@ -18,7 +37,7 @@ const BTN_CANCEL = '❌ Отмена';
 const sessions = new Map();
 
 function env(name, fallback = '') {
-  return process.env[name] || fallback;
+  return (process.env[name] || fallback).trim();
 }
 
 function ygHeaders() {
@@ -52,6 +71,13 @@ function htmlToText(html) {
     .trim();
 }
 
+function stripMarkerFromDesc(htmlOrText) {
+  return String(htmlOrText || '')
+    .replace(new RegExp(`\\s*#?${MARKER}\\s*`, 'gi'), '')
+    .replace(/<p>\s*<\/p>/gi, '')
+    .trim();
+}
+
 async function tg(method, body) {
   const token = env('YOUGILE_TELEGRAM_BOT_TOKEN');
   if (!token) throw new Error('YOUGILE_TELEGRAM_BOT_TOKEN missing');
@@ -82,14 +108,86 @@ function cancelKeyboard() {
   };
 }
 
+function notifyChatIds() {
+  const raw = env('YOUGILE_TELEGRAM_CHAT_ID');
+  return raw
+    .split(/[,;\s]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 async function reply(chatId, text, extra = {}) {
-  return tg('sendMessage', {
+  const payload = {
     chat_id: chatId,
     text,
     parse_mode: 'HTML',
     disable_web_page_preview: true,
     ...extra,
-  });
+  };
+  try {
+    return await tg('sendMessage', payload);
+  } catch (e) {
+    // HTML мог сломаться — шлём plain
+    console.error('reply HTML failed, plain fallback', e.message);
+    const { parse_mode: _p, ...rest } = payload;
+    return tg('sendMessage', { ...rest, text: htmlToText(text) });
+  }
+}
+
+/**
+ * Always try to deliver to every configured group chat.
+ * Retries + plain-text fallback. Returns { ok, sent, errors }.
+ */
+async function notifyGroup(html, { alsoChatId } = {}) {
+  const ids = new Set(notifyChatIds());
+  if (alsoChatId != null) ids.add(String(alsoChatId));
+  if (!ids.size) {
+    console.error('notifyGroup: no YOUGILE_TELEGRAM_CHAT_ID');
+    return { ok: false, sent: 0, errors: ['no chat id'] };
+  }
+
+  const threadId = env('YOUGILE_NOTIFY_THREAD_ID');
+  const plain = htmlToText(html);
+  let sent = 0;
+  const errors = [];
+
+  for (const chatId of ids) {
+    let delivered = false;
+    for (let attempt = 1; attempt <= 3 && !delivered; attempt++) {
+      try {
+        const body = {
+          chat_id: chatId,
+          text: html,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+        };
+        if (threadId) body.message_thread_id = Number(threadId);
+        await tg('sendMessage', body);
+        delivered = true;
+        sent += 1;
+      } catch (e1) {
+        try {
+          const body = {
+            chat_id: chatId,
+            text: plain.slice(0, 4000),
+            disable_web_page_preview: true,
+          };
+          if (threadId) body.message_thread_id = Number(threadId);
+          await tg('sendMessage', body);
+          delivered = true;
+          sent += 1;
+        } catch (e2) {
+          console.error(`notifyGroup chat=${chatId} attempt=${attempt}`, e1.message, e2.message);
+          if (attempt === 3) errors.push(`${chatId}: ${e2.message}`);
+          await new Promise((r) => setTimeout(r, 400 * attempt));
+        }
+      }
+    }
+  }
+
+  if (!sent) console.error('notifyGroup FAILED', errors);
+  else console.log('notifyGroup sent', sent, 'chats', [...ids].join(','));
+  return { ok: sent > 0, sent, errors };
 }
 
 async function fetchBoards() {
@@ -101,6 +199,7 @@ async function fetchBoards() {
   const data = await r.json();
   const out = {};
   for (const b of data.content || []) {
+    if (b.deleted) continue;
     const cr = await fetch(`${YG_API}/columns?boardId=${b.id}&limit=50`, {
       headers: ygHeaders(),
     });
@@ -114,16 +213,22 @@ async function fetchBoards() {
   return out;
 }
 
-function pickInboxColumn(boards) {
-  const inbox = boards.Inbox || boards['Идеи со звонков'];
-  if (!inbox) throw new Error('Inbox board not found');
-  const cols = inbox.columns;
-  for (const name of ['Нераспределённое', 'Бэклог', 'To Do']) {
-    if (cols[name]) return { board: 'Inbox', column: name, columnId: cols[name] };
+function pickSandboxColumn(boards) {
+  const board =
+    boards.Sandbox ||
+    boards.Inbox ||
+    boards['Идеи со звонков'] ||
+    boards.sandbox;
+  if (!board) throw new Error('Sandbox board not found');
+  const boardName =
+    boards.Sandbox ? 'Sandbox' : boards.Inbox ? 'Inbox' : Object.keys(boards).find((k) => boards[k] === board);
+  const cols = board.columns;
+  for (const name of ['Нераспределённое', 'Бэклог', 'To Do', 'Inbox']) {
+    if (cols[name]) return { board: boardName || 'Sandbox', column: name, columnId: cols[name] };
   }
   const [column, columnId] = Object.entries(cols)[0] || [];
-  if (!columnId) throw new Error('Inbox has no columns');
-  return { board: 'Inbox', column, columnId };
+  if (!columnId) throw new Error('Sandbox has no columns');
+  return { board: boardName || 'Sandbox', column, columnId };
 }
 
 async function createYougileTask({ title, descriptionHtml, columnId, assigned }) {
@@ -159,14 +264,14 @@ async function createYougileTask({ title, descriptionHtml, columnId, assigned })
 function formatCreateNotify({ title, code, taskId, board, column, description, assigneesText }) {
   const company = env('YOUGILE_COMPANY_ID');
   const head = code ? `<b>${escapeHtml(code)}</b> · ${escapeHtml(title)}` : `<b>${escapeHtml(title)}</b>`;
-  let body = htmlToText(description);
+  let body = htmlToText(stripMarkerFromDesc(description));
   if (body.length > 2800) body = `${body.slice(0, 2800)}…`;
   return [
     '<b>Создание</b>',
     head,
     `${escapeHtml(board)} / ${escapeHtml(column)}`,
     '',
-    `<b>Исполнитель:</b> ${assigneesText || 'не назначен'}`,
+    `<b>Исполнитель:</b> ${escapeHtml(assigneesText || 'не назначен')}`,
     '',
     '<b>Описание:</b>',
     escapeHtml(body || '—'),
@@ -195,31 +300,65 @@ function rememberTaskInState(task, board, column) {
   writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
 }
 
-async function notifyGroup(html) {
-  const chatId = env('YOUGILE_TELEGRAM_CHAT_ID');
-  if (!chatId) return;
-  await reply(chatId, html);
-}
-
 async function handleStart(chatId) {
   sessions.delete(chatId);
   await reply(
     chatId,
     '<b>Taneesh YouGile</b>\n\n' +
-      '• <b>Новая задача</b> — создаст карточку в Inbox → Нераспределённое и пришлёт пуш в группу\n' +
-      '• <b>Проверить YouGile</b> — сразу сверит доски (переносы/удаления)\n\n' +
-      'Или просто пришли текст — это станет названием задачи.',
+      '• <b>Новая задача</b> — карточка в Sandbox → Нераспределённое + пуш в группу\n' +
+      '• <b>Голосовое</b> — расшифрую и создам по шаблону в Sandbox\n' +
+      '• <b>Проверить YouGile</b> — сверка переносов/удалений\n\n' +
+      'Или просто пришли текст / войсик — это станет задачей.',
     { reply_markup: mainKeyboard() },
   );
 }
 
-async function createFromText(chatId, title, description = '') {
+/** Title = first sentence / line; rest goes to description body. */
+export function parseVoiceToTask(transcript) {
+  const text = String(transcript || '').replace(/\s+/g, ' ').trim();
+  if (!text) return { title: 'Голосовая задача', body: '' };
+
+  const sentenceMatch = text.match(/^(.{8,160}?[.!?…])(\s|$)/u);
+  const lineMatch = text.split(/\n/)[0];
+  let title = (sentenceMatch?.[1] || lineMatch || text).trim();
+  if (title.length > 120) title = `${title.slice(0, 117)}…`;
+  const body = text === title ? text : text;
+  return { title, body };
+}
+
+function buildTemplateDescription({ body, source = 'Telegram', type = 'Из голоса / уточнить' }) {
+  const safeBody = escapeHtml(body || '—').replace(/\n/g, '<br/>');
+  return (
+    `<p><b>Тип</b></p><p>${escapeHtml(type)}</p>` +
+    `<p><b>Контекст</b></p><p>${safeBody}</p>` +
+    `<p><b>Как сейчас</b></p><p>—</p>` +
+    `<p><b>Как надо</b></p><p>—</p>` +
+    `<p><b>Технически</b></p><p>—</p>` +
+    `<p><b>Источник</b></p><p>${escapeHtml(source)}</p>` +
+    `<p>#${MARKER}</p>`
+  );
+}
+
+async function createFromText(chatId, title, description = '', { fromVoice = false, transcript = '' } = {}) {
   const boards = await fetchBoards();
-  const place = pickInboxColumn(boards);
-  const descHtml =
-    (description
-      ? `<p>${escapeHtml(description).replace(/\n/g, '<br/>')}</p>`
-      : '<p></p>') + '<p data-tg-bot-created="1"></p>';
+  const place = pickSandboxColumn(boards);
+
+  let descHtml;
+  if (fromVoice) {
+    descHtml = buildTemplateDescription({
+      body: transcript || description,
+      source: 'Telegram · голосовое',
+      type: 'Из голоса / уточнить',
+    });
+  } else if (description) {
+    descHtml =
+      `<p>${escapeHtml(description).replace(/\n/g, '<br/>')}</p>` +
+      `<p><b>Источник</b></p><p>Telegram</p>` +
+      `<p>#${MARKER}</p>`;
+  } else {
+    descHtml =
+      `<p></p><p><b>Источник</b></p><p>Telegram</p><p>#${MARKER}</p>`;
+  }
 
   const task = await createYougileTask({
     title: title.trim().slice(0, 200),
@@ -227,6 +366,7 @@ async function createFromText(chatId, title, description = '') {
     columnId: place.columnId,
   });
 
+  // В state ДО пуша — poll не задвоит «Создание»
   rememberTaskInState(task, place.board, place.column);
 
   const html = formatCreateNotify({
@@ -235,19 +375,29 @@ async function createFromText(chatId, title, description = '') {
     taskId: task.id,
     board: place.board,
     column: place.column,
-    description: task.description || description,
+    description: stripMarkerFromDesc(task.description || descHtml),
     assigneesText: 'не назначен',
   });
-  await notifyGroup(html);
+
+  const notify = await notifyGroup(html);
+  // Если юзер писал не из группы — дублируем пуш ему не нужно (уже reply ниже).
+  // Если писали из другого чата и группа не приняла — скажем явно.
 
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
+  const notifyLine = notify.ok
+    ? '📣 В группу отправил.'
+    : `⚠️ Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
+
   await reply(
     chatId,
     `✅ Создано: <b>${escapeHtml(task.idTaskProject || '')}</b> ${escapeHtml(task.title || title)}\n` +
       `${escapeHtml(place.board)} / ${escapeHtml(place.column)}\n` +
+      `${notifyLine}\n` +
       `<a href="${link}">Открыть в YouGile</a>`,
     { reply_markup: mainKeyboard() },
   );
+
+  return { task, notify };
 }
 
 function loadState() {
@@ -320,6 +470,10 @@ async function snapshotAll() {
   return snap;
 }
 
+function isBotCreatedDesc(desc) {
+  return String(desc || '').includes(MARKER) || String(desc || '').includes('data-tg-bot-created');
+}
+
 /** Poll YouGile and push move/delete/new (skips bot-created). Returns sent count. */
 export async function syncYougileOnce({ quietNew = false } = {}) {
   const state = loadState();
@@ -333,9 +487,6 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
     const old = prev[tid];
     if (!old) {
       if (!quietNew) {
-        if (String(info.description || '').includes('data-tg-bot-created')) {
-          continue;
-        }
         let desc = info.description || '';
         if (!desc) {
           try {
@@ -347,8 +498,10 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
             /* ignore */
           }
         }
-        if (String(desc).includes('data-tg-bot-created')) continue;
-        await notifyGroup(
+        if (isBotCreatedDesc(desc)) {
+          continue;
+        }
+        const n = await notifyGroup(
           formatCreateNotify({
             title: info.title,
             code: info.code,
@@ -359,7 +512,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
             assigneesText: 'не назначен',
           }),
         );
-        sent += 1;
+        if (n.ok) sent += 1;
       }
       continue;
     }
@@ -369,7 +522,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
         old.board !== info.board
           ? `${old.board}/${old.column || '?'} → ${info.board}/${info.column}`
           : `${old.column || '?'} → ${info.column}`;
-      await notifyGroup(
+      const n = await notifyGroup(
         formatActionNotify({
           action: 'Перенос',
           title: info.title,
@@ -379,14 +532,14 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
           detail,
         }),
       );
-      sent += 1;
+      if (n.ok) sent += 1;
     }
   }
 
   if (!quietNew) {
     for (const [tid, old] of Object.entries(prev)) {
       if (snap[tid]) continue;
-      await notifyGroup(
+      const n = await notifyGroup(
         formatActionNotify({
           action: 'Удаление',
           title: old.title || 'без названия',
@@ -396,7 +549,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
           detail: old.column || '',
         }),
       );
-      sent += 1;
+      if (n.ok) sent += 1;
     }
   }
 
@@ -440,20 +593,189 @@ export function startYougilePolling(intervalMs = 60_000) {
       console.error('yougile poll', e.message);
     }
   };
-  // baseline first without flood
   syncYougileOnce({ quietNew: true })
     .then(() => console.log('yougile poll baselined'))
     .catch((e) => console.error('yougile baseline', e.message));
   setInterval(tick, intervalMs);
 }
 
+async function downloadTelegramFile(fileId) {
+  if (!existsSync(TMP_DIR)) mkdirSync(TMP_DIR, { recursive: true });
+  const meta = await tg('getFile', { file_id: fileId });
+  const path = meta.file_path;
+  if (!path) throw new Error('Telegram file_path empty');
+  const token = env('YOUGILE_TELEGRAM_BOT_TOKEN');
+  const url = `https://api.telegram.org/file/bot${token}/${path}`;
+  const ext = path.includes('.') ? path.split('.').pop() : 'ogg';
+  const local = join(TMP_DIR, `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`download voice ${res.status}`);
+  await pipeline(Readable.fromWeb(res.body), createWriteStream(local));
+  return local;
+}
+
+function runCmd(cmd, args, opts = {}) {
+  return new Promise((resolve, reject) => {
+    const p = spawn(cmd, args, { ...opts });
+    let stdout = '';
+    let stderr = '';
+    p.stdout?.on('data', (d) => {
+      stdout += d;
+    });
+    p.stderr?.on('data', (d) => {
+      stderr += d;
+    });
+    p.on('error', reject);
+    p.on('close', (code) => {
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error(`${cmd} exit ${code}: ${stderr.slice(0, 300)}`));
+    });
+  });
+}
+
+async function transcribeWithOpenAI(filePath) {
+  const key = env('OPENAI_API_KEY');
+  if (!key) return null;
+  const buf = readFileSync(filePath);
+  const form = new FormData();
+  form.append('file', new Blob([buf]), filePath.split('/').pop() || 'voice.ogg');
+  form.append('model', 'whisper-1');
+  form.append('language', 'ru');
+  const r = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`OpenAI Whisper ${r.status}: ${t.slice(0, 200)}`);
+  }
+  const data = await r.json();
+  return String(data.text || '').trim();
+}
+
+async function transcribeWithLocalWhisper(filePath) {
+  // openai-whisper CLI: `whisper file.ogg --model tiny --language ru --output_format txt`
+  try {
+    await runCmd('python3', ['-c', 'import whisper']);
+  } catch {
+    return null;
+  }
+  const outDir = TMP_DIR;
+  await runCmd(
+    'python3',
+    [
+      '-m',
+      'whisper',
+      filePath,
+      '--model',
+      env('WHISPER_MODEL', 'tiny'),
+      '--language',
+      'ru',
+      '--output_format',
+      'txt',
+      '--output_dir',
+      outDir,
+    ],
+    { env: process.env },
+  );
+  const base = filePath.split('/').pop().replace(/\.[^.]+$/, '');
+  const txtPath = join(outDir, `${base}.txt`);
+  if (!existsSync(txtPath)) throw new Error('whisper produced no txt');
+  const text = readFileSync(txtPath, 'utf8').trim();
+  try {
+    unlinkSync(txtPath);
+  } catch {
+    /* ignore */
+  }
+  return text;
+}
+
+async function transcribeVoiceFile(filePath) {
+  const openai = await transcribeWithOpenAI(filePath);
+  if (openai) return openai;
+  const local = await transcribeWithLocalWhisper(filePath);
+  if (local) return local;
+  throw new Error(
+    'Нет расшифровки: добавь OPENAI_API_KEY в .env или установи python-пакет openai-whisper',
+  );
+}
+
+async function handleVoice(chatId, msg) {
+  const voice = msg.voice || msg.audio || msg.video_note;
+  if (!voice?.file_id) {
+    await reply(chatId, 'Не нашёл аудио в сообщении.', { reply_markup: mainKeyboard() });
+    return;
+  }
+  await reply(chatId, '🎤 Слушаю и расшифровываю…');
+  let local;
+  try {
+    local = await downloadTelegramFile(voice.file_id);
+    const transcript = await transcribeVoiceFile(local);
+    if (!transcript) throw new Error('Пустая расшифровка');
+    const { title, body } = parseVoiceToTask(transcript);
+    await reply(
+      chatId,
+      `📝 Расшифровка:\n<i>${escapeHtml(transcript.slice(0, 1500))}</i>\n\nСоздаю в Sandbox…`,
+    );
+    await createFromText(chatId, title, body, { fromVoice: true, transcript: body });
+  } catch (e) {
+    console.error('voice', e);
+    await reply(chatId, `Не смог обработать голосовое: ${escapeHtml(e.message)}`, {
+      reply_markup: mainKeyboard(),
+    });
+  } finally {
+    if (local) {
+      try {
+        unlinkSync(local);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 export async function handleYougileUpdate(update) {
   const msg = update.message || update.edited_message;
-  if (!msg?.chat || !msg.text) return { ok: true, ignored: true };
+  if (!msg?.chat) return { ok: true, ignored: true };
 
   const chatId = msg.chat.id;
-  const text = String(msg.text || '').trim();
+  const text = String(msg.text || msg.caption || '').trim();
   const session = sessions.get(chatId);
+
+  if (msg.voice || msg.audio || msg.video_note) {
+    // В визарде «описание» — войсик только как текст описания
+    if (session?.step === 'desc' && session.title) {
+      await reply(chatId, '🎤 Расшифровываю описание…');
+      let local;
+      try {
+        const voice = msg.voice || msg.audio || msg.video_note;
+        local = await downloadTelegramFile(voice.file_id);
+        const transcript = await transcribeVoiceFile(local);
+        sessions.delete(chatId);
+        await createFromText(chatId, session.title, transcript);
+      } catch (e) {
+        console.error(e);
+        await reply(chatId, `Не удалось: ${escapeHtml(e.message)}`, {
+          reply_markup: mainKeyboard(),
+        });
+      } finally {
+        if (local) {
+          try {
+            unlinkSync(local);
+          } catch {
+            /* ignore */
+          }
+        }
+      }
+      return { ok: true, voice: true };
+    }
+    sessions.delete(chatId);
+    await handleVoice(chatId, msg);
+    return { ok: true, voice: true };
+  }
+
+  if (!text) return { ok: true, ignored: true };
 
   if (text === '/start' || text === '/help') {
     await handleStart(chatId);
@@ -474,7 +796,7 @@ export async function handleYougileUpdate(update) {
 
   if (text === BTN_NEW || text === '/new') {
     sessions.set(chatId, { step: 'title' });
-    await reply(chatId, 'Напиши <b>название</b> задачи:', {
+    await reply(chatId, 'Напиши <b>название</b> задачи (или пришли голосовое):', {
       reply_markup: cancelKeyboard(),
     });
     return { ok: true };
@@ -484,7 +806,7 @@ export async function handleYougileUpdate(update) {
     sessions.set(chatId, { step: 'desc', title: text });
     await reply(
       chatId,
-      'Название принял. Теперь <b>описание</b> (или «-» / «без описания»):',
+      'Название принял. Теперь <b>описание</b> (или «-» / «без описания» / голосовое):',
       { reply_markup: cancelKeyboard() },
     );
     return { ok: true };
@@ -506,7 +828,6 @@ export async function handleYougileUpdate(update) {
     return { ok: true };
   }
 
-  // Fast path: plain text → create task with empty description
   if (!text.startsWith('/')) {
     try {
       await createFromText(chatId, text, '');
