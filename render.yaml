@@ -17,3 +17,17 @@ services:
         sync: false
       - key: TELEGRAM_ORGANIZER_IDS
         sync: false
+      - key: PUBLIC_URL
+        value: "https://taneesh-organizer-api.onrender.com"
+      - key: YOUGILE_API_KEY
+        sync: false
+      - key: YOUGILE_COMPANY_ID
+        sync: false
+      - key: YOUGILE_PROJECT_ID
+        sync: false
+      - key: YOUGILE_TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: YOUGILE_TELEGRAM_CHAT_ID
+        sync: false
+      - key: YOUGILE_NOTIFY_BOARDS
+        value: "*"
