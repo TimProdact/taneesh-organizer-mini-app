@@ -1380,13 +1380,19 @@ function isBotCreatedDesc(desc) {
   return String(desc || '').includes(MARKER) || String(desc || '').includes('data-tg-bot-created');
 }
 
-/** Poll YouGile and push move/delete/new (skips bot-created). Returns sent count. */
-export async function syncYougileOnce({ quietNew = false } = {}) {
+/** Poll YouGile: переносы/удаления → DM. «Новые» в группу — только createFromDraft. */
+export async function syncYougileOnce({ quietNew = true } = {}) {
   const state = loadState();
   const prev = state.tasks || {};
-  const rebaseline = state.schema !== 3;
-  if (rebaseline) quietNew = true;
   const snap = await snapshotAll();
+
+  // State пустой (первый запуск / redeploy Render) — запоминаем без спама в группу
+  if (!Object.keys(prev).length) {
+    quietNew = true;
+  } else if (state.schema !== 3) {
+    quietNew = true;
+  }
+
   let sent = 0;
 
   for (const [tid, info] of Object.entries(snap)) {
