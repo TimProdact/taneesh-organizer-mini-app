@@ -10,6 +10,10 @@
  *   GROQ_API_KEY                      — Whisper + разбор структуры (бесплатный облачный tier)
  *   OPENAI_API_KEY                    — запасной вариант (если нет Groq)
  *   YOUGILE_NOTIFY_THREAD_ID          — topic id, если группа-форум (только для group)
+ *
+ * Исполнитель: когда в задаче появляется assigned (бот или YouGile) —
+ * этому человеку в личку бота уходит карточка задачи. Групповые
+ * уведомления про новые задачи не меняются.
  */
 import {
   readFileSync,
@@ -181,6 +185,22 @@ function loadKnownUsers() {
 
 function saveKnownUsers(data) {
   writeFileSync(USERS_PATH, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+/** Подтянуть telegramId исполнителей из файла /start. */
+function hydratePeopleTelegramIds() {
+  const known = loadKnownUsers().users || {};
+  for (const u of Object.values(known)) {
+    const uname = String(u?.username || '')
+      .toLowerCase()
+      .replace(/^@/, '');
+    if (!uname || u?.id == null) continue;
+    for (const p of PEOPLE) {
+      if (p.telegram.replace(/^@/, '').toLowerCase() === uname) {
+        p.telegramId = Number(u.id);
+      }
+    }
+  }
 }
 
 /** Запоминаем telegram id после /start — чтобы потом слать в личку. */
@@ -448,16 +468,22 @@ function privateChatIds() {
 }
 
 /**
- * @param {'group'|'dm'} channel
- * group → только новые задачи; dm → перенос/удаление/прочее
+ * @param {'group'|'dm'|'direct'} channel
+ * group → новые задачи; dm → перенос/удаление; direct → конкретные chat id (исполнители)
  */
-async function notifyTelegram(html, { channel = 'group', alsoChatId, reply_markup } = {}) {
-  const ids = new Set(channel === 'dm' ? privateChatIds() : groupChatIds());
+async function notifyTelegram(html, { channel = 'group', alsoChatId, toChatIds, reply_markup } = {}) {
+  const ids = new Set(
+    channel === 'direct'
+      ? (toChatIds || []).map(String)
+      : channel === 'dm'
+        ? privateChatIds()
+        : groupChatIds(),
+  );
   if (alsoChatId != null) ids.add(String(alsoChatId));
   if (!ids.size) {
     console.error(
       `notifyTelegram(${channel}): no chat id — set YOUGILE_TELEGRAM_CHAT_ID` +
-        (channel === 'dm' ? '_PRIVATE' : ''),
+        (channel === 'dm' ? '_PRIVATE' : channel === 'direct' ? ' (assignee telegramId)' : ''),
     );
     return { ok: false, sent: 0, errors: ['no chat id'], messages: [] };
   }
@@ -526,6 +552,11 @@ async function notifyGroup(html, opts = {}) {
 
 async function notifyDm(html, opts = {}) {
   return notifyTelegram(html, { ...opts, channel: 'dm' });
+}
+
+/** Личка только указанным chat id (исполнители), не в YOUGILE_TELEGRAM_CHAT_ID_PRIVATE. */
+async function notifyDirect(chatIds, html, opts = {}) {
+  return notifyTelegram(html, { ...opts, channel: 'direct', toChatIds: chatIds });
 }
 
 async function fetchBoards() {
@@ -665,6 +696,74 @@ function createdTaskKeyboard(taskId) {
 function peopleByKeys(keys) {
   const set = new Set(keys || []);
   return PEOPLE.filter((p) => set.has(p.key));
+}
+
+function peopleByYougileIds(ids) {
+  const set = new Set((ids || []).map(String));
+  return PEOPLE.filter((p) => set.has(String(p.yougileId)));
+}
+
+/** YouGile assigned ids, которых не было в предыдущем снимке. */
+function newlyAssignedIds(prevAssigned, nextAssigned) {
+  const had = new Set((prevAssigned || []).map(String));
+  return [...new Set((nextAssigned || []).map(String))].filter((id) => id && !had.has(id));
+}
+
+function formatAssigneeAssignedNotify(payload) {
+  return `<b>📌 Вам назначена задача</b>\n\n${formatCreateNotify(payload)}`;
+}
+
+/**
+ * Личка только новым исполнителям (PEOPLE → telegramId).
+ * Группу и YOUGILE_TELEGRAM_CHAT_ID_PRIVATE не трогает.
+ */
+async function notifyAssigneesAssigned(yougileUserIds, payload) {
+  hydratePeopleTelegramIds();
+  const people = peopleByYougileIds(yougileUserIds);
+  if (!people.length) {
+    if ((yougileUserIds || []).length) {
+      console.warn(
+        'assignee notify: unknown YouGile user ids',
+        (yougileUserIds || []).map(String).join(','),
+      );
+    }
+    return { ok: false, sent: 0, errors: ['unknown assignees'], messages: [] };
+  }
+
+  let sent = 0;
+  const errors = [];
+  const messages = [];
+
+  for (const p of people) {
+    if (p.telegramId == null) {
+      const err = `${p.key}: нет telegram id — пусть напишет /start боту`;
+      console.error('assignee notify:', err);
+      errors.push(err);
+      continue;
+    }
+    const html = formatAssigneeAssignedNotify({
+      ...payload,
+      assigneesText: `${p.label} ${p.telegram}`,
+    });
+    const r = await notifyDirect([p.telegramId], html);
+    sent += r.sent || 0;
+    if (r.messages?.length) messages.push(...r.messages);
+    if (!r.ok) errors.push(...(r.errors || [`${p.key}: fail`]));
+  }
+
+  return { ok: sent > 0, sent, errors, messages };
+}
+
+async function fetchTaskDescription(taskId, fallback = '') {
+  if (fallback) return fallback;
+  try {
+    const full = await fetch(`${YG_API}/tasks/${taskId}`, {
+      headers: ygHeaders(),
+    }).then((r) => r.json());
+    return full.description || '';
+  } catch {
+    return '';
+  }
 }
 
 function resolveCreator(from) {
@@ -1278,6 +1377,23 @@ async function createFromDraft(chatId, draft) {
 
   const notify = await notifyGroup(html, { reply_markup: createdTaskKeyboard(task.id) });
   rememberTaskMessages(task.id, notify.messages || []);
+
+  // Исполнитель → только ему в личку (если уже указан при создании)
+  if (assigned.length) {
+    const toAssignees = await notifyAssigneesAssigned(assigned, {
+      title: task.title || title,
+      code: task.idTaskProject || '',
+      taskId: task.id,
+      board: place.board,
+      column: place.column,
+      draft: ready,
+    });
+    rememberTaskMessages(task.id, toAssignees.messages || []);
+    if (!toAssignees.ok) {
+      console.warn('assignee notify on create:', toAssignees.errors?.join('; ') || 'fail');
+    }
+  }
+
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
   const notifyLine = notify.ok
     ? 'В группу отправил'
@@ -1380,17 +1496,20 @@ function isBotCreatedDesc(desc) {
   return String(desc || '').includes(MARKER) || String(desc || '').includes('data-tg-bot-created');
 }
 
-/** Poll YouGile: переносы/удаления → DM. «Новые» в группу — только createFromDraft. */
-export async function syncYougileOnce({ quietNew = true } = {}) {
+/** Poll YouGile: новые задачи → группа, переносы/удаления → DM, новый assigned → личка исполнителю. */
+export async function syncYougileOnce({ quietNew = false } = {}) {
+  hydratePeopleTelegramIds();
   const state = loadState();
   const prev = state.tasks || {};
   const snap = await snapshotAll();
 
-  // State пустой (первый запуск / redeploy Render) — запоминаем без спама в группу
+  // State пустой (первый запуск / redeploy Render) — baseline без спама в группу
   if (!Object.keys(prev).length) {
     quietNew = true;
+    console.log('yougile sync: empty notify state, baselining without group notify');
   } else if (state.schema !== 3) {
     quietNew = true;
+    console.log('yougile sync: schema migration, baselining without group notify');
   }
 
   let sent = 0;
@@ -1401,30 +1520,35 @@ export async function syncYougileOnce({ quietNew = true } = {}) {
       if (!quietNew) {
         let desc = info.description || '';
         if (!desc) {
-          try {
-            const full = await fetch(`${YG_API}/tasks/${tid}`, {
-              headers: ygHeaders(),
-            }).then((r) => r.json());
-            desc = full.description || '';
-          } catch {
-            /* ignore */
-          }
+          desc = await fetchTaskDescription(tid);
         }
-        if (isBotCreatedDesc(desc)) {
-          continue;
+        if (!isBotCreatedDesc(desc)) {
+          const n = await notifyGroup(
+            formatCreateNotify({
+              title: info.title,
+              code: info.code,
+              taskId: tid,
+              board: info.board,
+              column: info.column,
+              description: desc,
+              assigneesText: 'не назначен',
+            }),
+          );
+          if (n.ok) sent += 1;
         }
-        const n = await notifyGroup(
-          formatCreateNotify({
+        // Уже с исполнителем при появлении задачи — сразу в личку исполнителю
+        const assignedNow = info.assigned || [];
+        if (assignedNow.length) {
+          const a = await notifyAssigneesAssigned(assignedNow, {
             title: info.title,
             code: info.code,
             taskId: tid,
             board: info.board,
             column: info.column,
             description: desc,
-            assigneesText: 'не назначен',
-          }),
-        );
-        if (n.ok) sent += 1;
+          });
+          if (a.sent) sent += a.sent;
+        }
       }
       continue;
     }
@@ -1446,6 +1570,23 @@ export async function syncYougileOnce({ quietNew = true } = {}) {
       );
       if (n.ok) sent += 1;
     }
+
+    // Новый исполнитель на уже известной задаче (в т.ч. старой без assigned)
+    if (!quietNew) {
+      const added = newlyAssignedIds(old.assigned, info.assigned);
+      if (added.length) {
+        const desc = await fetchTaskDescription(tid, info.description || '');
+        const a = await notifyAssigneesAssigned(added, {
+          title: info.title,
+          code: info.code || old.code || '',
+          taskId: tid,
+          board: info.board,
+          column: info.column,
+          description: desc,
+        });
+        if (a.sent) sent += a.sent;
+      }
+    }
   }
 
   if (!quietNew) {
@@ -1465,7 +1606,7 @@ export async function syncYougileOnce({ quietNew = true } = {}) {
     }
   }
 
-  const next = { schema: 3, tasks: {} };
+  const next = { schema: 3, tasks: {}, baselinedAt: state.baselinedAt || new Date().toISOString() };
   for (const [tid, info] of Object.entries(snap)) {
     next.tasks[tid] = {
       board: info.board,
@@ -1484,8 +1625,7 @@ async function runSyncOnce(chatId, userMsgId = null) {
   if (userMsgId != null) trackUserMessage(chatId, userMsgId);
   await replyEphemeral(chatId, '🔄 Проверяю YouGile…');
   try {
-    const n = await syncYougileOnce({ quietNew: false });
-    // «Готово» только статус — удалим вместе с «Проверяю»; уведомления (Удаление и т.п.) остаются
+    const n = await syncYougileOnce();
     await replyEphemeral(chatId, `Готово. Отправлено уведомлений: <b>${n}</b>`, {
       reply_markup: mainKeyboard(),
     });
@@ -1503,7 +1643,7 @@ export function startYougilePolling(intervalMs = 60_000) {
   if (!yougileBotConfigured()) return;
   const tick = async () => {
     try {
-      const n = await syncYougileOnce({ quietNew: false });
+      const n = await syncYougileOnce();
       if (n) console.log('yougile poll sent', n);
     } catch (e) {
       console.error('yougile poll', e.message);
