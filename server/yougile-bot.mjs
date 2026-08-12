@@ -938,14 +938,14 @@ function formatCreateNotify({
 }
 
 function rememberTaskInState(task, board, column) {
-  let state = { schema: 3, tasks: {} };
+  let state = { schema: 4, tasks: {} };
   try {
     if (existsSync(STATE_PATH)) state = JSON.parse(readFileSync(STATE_PATH, 'utf8'));
   } catch {
     /* ignore */
   }
   if (!state.tasks) state.tasks = {};
-  state.schema = 3;
+  state.schema = 4;
   state.tasks[task.id] = {
     board,
     column,
@@ -1428,11 +1428,11 @@ function loadState() {
   } catch {
     /* ignore */
   }
-  return { schema: 3, tasks: {} };
+  return { schema: 4, tasks: {} };
 }
 
 function saveState(state) {
-  state.schema = 3;
+  state.schema = 4;
   writeFileSync(STATE_PATH, `${JSON.stringify(state, null, 2)}\n`);
 }
 
@@ -1500,15 +1500,17 @@ function isBotCreatedDesc(desc) {
 export async function syncYougileOnce({ quietNew = false } = {}) {
   hydratePeopleTelegramIds();
   const state = loadState();
-  const prev = state.tasks || {};
+  let prev = state.tasks || {};
   const snap = await snapshotAll();
 
   // State пустой (первый запуск / redeploy Render) — baseline без спама в группу
   if (!Object.keys(prev).length) {
     quietNew = true;
     console.log('yougile sync: empty notify state, baselining without group notify');
-  } else if (state.schema !== 3) {
+  } else if (state.schema !== 4) {
+    // Смена schema (например после пересоздания колонок) — полный baseline, без переносов/удалений
     quietNew = true;
+    prev = {};
     console.log('yougile sync: schema migration, baselining without group notify');
   }
 
@@ -1606,7 +1608,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
     }
   }
 
-  const next = { schema: 3, tasks: {}, baselinedAt: state.baselinedAt || new Date().toISOString() };
+  const next = { schema: 4, tasks: {}, baselinedAt: state.baselinedAt || new Date().toISOString() };
   for (const [tid, info] of Object.entries(snap)) {
     next.tasks[tid] = {
       board: info.board,
