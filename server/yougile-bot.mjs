@@ -1839,8 +1839,22 @@ export async function handleYougileUpdate(update) {
   const chatId = msg.chat.id;
   const from = msg.from;
 
-  // Группа — только уведомления (бот шлёт сам); из группы задачи не создаём
+  // Группа — только уведомления; задачи создаём в личке @taneesh_yougile_bot
   if (!isPrivateChat(msg.chat)) {
+    const text = String(msg.text || msg.caption || '').trim();
+    const touched =
+      /^\/(start|new|sync|cancel|help)(?:@\w+)?(?:\s|$)/i.test(text) ||
+      text === BTN_NEW ||
+      text === BTN_SYNC ||
+      text === BTN_CANCEL ||
+      Boolean(msg.voice || msg.audio || msg.video_note);
+    if (touched && isGroupNotifyChat(chatId)) {
+      await reply(
+        chatId,
+        '➡️ <b>Задачи — только в личке с ботом</b>\n' +
+          '<a href="https://t.me/taneesh_yougile_bot">@taneesh_yougile_bot</a> → /start',
+      );
+    }
     return { ok: true, ignored: true, group: true };
   }
 
