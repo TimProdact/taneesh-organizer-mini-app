@@ -592,7 +592,7 @@ function pickSandboxColumn(boards) {
   const boardName =
     boards.Sandbox ? 'Sandbox' : boards.Inbox ? 'Inbox' : Object.keys(boards).find((k) => boards[k] === board);
   const cols = board.columns;
-  for (const name of ['Нераспределённое', 'Бэклог', 'To Do', 'Inbox']) {
+  for (const name of ['Нераспределённое', 'Уточнить', 'Готово к работе', 'Бэклог', 'To Do', 'Inbox']) {
     if (cols[name]) return { board: boardName || 'Sandbox', column: name, columnId: cols[name] };
   }
   const [column, columnId] = Object.entries(cols)[0] || [];
