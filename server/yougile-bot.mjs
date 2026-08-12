@@ -352,10 +352,13 @@ async function replyEphemeral(chatId, text, extra = {}) {
 async function deleteTgMessage(chatId, messageId) {
   if (chatId == null || messageId == null) return false;
   try {
-    await tg('deleteMessage', { chat_id: chatId, message_id: messageId });
+    await tg('deleteMessage', {
+      chat_id: Number(chatId) || chatId,
+      message_id: messageId,
+    });
     return true;
   } catch (e) {
-    console.error('deleteMessage', e.message);
+    console.error('deleteMessage', chatId, messageId, e.message);
     return false;
   }
 }
@@ -425,6 +428,15 @@ function splitChatIds(raw) {
 /** Группа — только «Создание». */
 function groupChatIds() {
   return splitChatIds(env('YOUGILE_TELEGRAM_CHAT_ID'));
+}
+
+function isGroupNotifyChat(chatId) {
+  const id = String(chatId);
+  return groupChatIds().some((g) => String(g) === id);
+}
+
+function isPrivateChat(chat) {
+  return chat?.type === 'private';
 }
 
 /** Личка — переносы, удаления и всё кроме новых задач. */
@@ -1703,18 +1715,28 @@ async function handleCallbackQuery(cq) {
   rememberTelegramUser(from);
 
   if (String(data).startsWith(CB_TASK_DEL_PREFIX)) {
+    if (!isPrivateChat(cq.message?.chat) && !isGroupNotifyChat(chatId)) {
+      try {
+        await tg('answerCallbackQuery', {
+          callback_query_id: cq.id,
+          text: 'Нет доступа',
+          show_alert: true,
+        });
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
     const taskId = String(data).slice(CB_TASK_DEL_PREFIX.length).trim();
     try {
       if (taskId) await deleteYougileTask(taskId);
       const msgs = takeTaskMessages(taskId);
-      // текущее сообщение (кнопка) тоже
       if (cq.message?.message_id != null) {
         msgs.push({ chatId: String(chatId), messageId: cq.message.message_id });
       }
       for (const m of msgs) {
         await deleteTgMessage(m.chatId, m.messageId);
       }
-      // убрать задачу из локального state синка
       try {
         const state = loadState();
         if (state.tasks?.[taskId]) {
@@ -1739,6 +1761,20 @@ async function handleCallbackQuery(cq) {
       } catch {
         /* ignore */
       }
+    }
+    return;
+  }
+
+  // Черновик / создание — только в личке
+  if (!isPrivateChat(cq.message?.chat)) {
+    try {
+      await tg('answerCallbackQuery', {
+        callback_query_id: cq.id,
+        text: 'Задачи создавай в личке с ботом',
+        show_alert: true,
+      });
+    } catch {
+      /* ignore */
     }
     return;
   }
@@ -1802,16 +1838,17 @@ export async function handleYougileUpdate(update) {
 
   const chatId = msg.chat.id;
   const from = msg.from;
-  const isPrivate = msg.chat.type === 'private';
 
-  // Личка — только команда (Тимур / Рашид / Рауф)
-  if (isPrivate) {
-    if (!isAllowedOperator(from)) {
-      await denyAccess(chatId);
-      return { ok: true, denied: true };
-    }
-    rememberTelegramUser(from);
+  // Группа — только уведомления (бот шлёт сам); из группы задачи не создаём
+  if (!isPrivateChat(msg.chat)) {
+    return { ok: true, ignored: true, group: true };
   }
+
+  if (!isAllowedOperator(from)) {
+    await denyAccess(chatId);
+    return { ok: true, denied: true };
+  }
+  rememberTelegramUser(from);
 
   const text = String(msg.text || msg.caption || '').trim();
   const session = sessions.get(chatId);
