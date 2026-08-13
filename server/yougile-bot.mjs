@@ -13,7 +13,8 @@
  *
  * Исполнитель: когда в задаче появляется assigned (бот или YouGile) —
  * этому человеку в личку бота уходит карточка задачи. Групповые
- * уведомления про новые задачи не меняются.
+ * уведомления про новые задачи не меняются — кроме PEOPLE с
+ * privateNotify: только личка исполнителю, без группы и без ops-DM.
  */
 import {
   readFileSync,
@@ -88,6 +89,17 @@ const PEOPLE = [
     telegram: '@Marshall2221',
     telegramId: 74803663,
     label: 'Рашид',
+  },
+  {
+    key: 'homa',
+    names: ['хома', 'homa', 'homa_akh'],
+    yougileId: '19fab4cf-5ede-4c2b-87b7-7fa97ad96d41',
+    email: 'shirodota312@gmail.com',
+    telegram: '@homa_akh',
+    telegramId: null, // узнаем после /start
+    label: 'Хома',
+    /** Только личка исполнителю: не в группу и не в ops-чат. */
+    privateNotify: true,
   },
 ];
 
@@ -703,6 +715,29 @@ function peopleByYougileIds(ids) {
   return PEOPLE.filter((p) => set.has(String(p.yougileId)));
 }
 
+function isPrivateNotifyPerson(p) {
+  return Boolean(p?.privateNotify);
+}
+
+/** Задачи этого исполнителя не светятся в группе и не уходят Тимуру в ops-DM. */
+function shouldSkipTeamNotify(assignedIds) {
+  return peopleByYougileIds(assignedIds).some(isPrivateNotifyPerson);
+}
+
+function isPrivateNotifyFrom(from) {
+  if (!from) return false;
+  hydratePeopleTelegramIds();
+  const id = Number(from.id);
+  const uname = String(from.username || '')
+    .toLowerCase()
+    .replace(/^@/, '');
+  return PEOPLE.some((p) => {
+    if (!isPrivateNotifyPerson(p)) return false;
+    if (p.telegramId != null && Number(p.telegramId) === id) return true;
+    return Boolean(uname) && p.telegram.replace(/^@/, '').toLowerCase() === uname;
+  });
+}
+
 /** YouGile assigned ids, которых не было в предыдущем снимке. */
 function newlyAssignedIds(prevAssigned, nextAssigned) {
   const had = new Set((prevAssigned || []).map(String));
@@ -727,18 +762,28 @@ async function notifyAssigneesAssigned(yougileUserIds, payload) {
         (yougileUserIds || []).map(String).join(','),
       );
     }
-    return { ok: false, sent: 0, errors: ['unknown assignees'], messages: [] };
+    return {
+      ok: false,
+      sent: 0,
+      errors: ['unknown assignees'],
+      messages: [],
+      pendingIds: (yougileUserIds || []).map(String),
+      notifiedIds: [],
+    };
   }
 
   let sent = 0;
   const errors = [];
   const messages = [];
+  const pendingIds = [];
+  const notifiedIds = [];
 
   for (const p of people) {
     if (p.telegramId == null) {
       const err = `${p.key}: нет telegram id — пусть напишет /start боту`;
       console.error('assignee notify:', err);
       errors.push(err);
+      pendingIds.push(String(p.yougileId));
       continue;
     }
     const html = formatAssigneeAssignedNotify({
@@ -748,10 +793,15 @@ async function notifyAssigneesAssigned(yougileUserIds, payload) {
     const r = await notifyDirect([p.telegramId], html);
     sent += r.sent || 0;
     if (r.messages?.length) messages.push(...r.messages);
-    if (!r.ok) errors.push(...(r.errors || [`${p.key}: fail`]));
+    if (!r.ok) {
+      errors.push(...(r.errors || [`${p.key}: fail`]));
+      pendingIds.push(String(p.yougileId));
+    } else {
+      notifiedIds.push(String(p.yougileId));
+    }
   }
 
-  return { ok: sent > 0, sent, errors, messages };
+  return { ok: sent > 0, sent, errors, messages, pendingIds, notifiedIds };
 }
 
 async function fetchTaskDescription(taskId, fallback = '') {
@@ -1234,18 +1284,29 @@ async function refineDraftWithLlm(draft) {
   }
 }
 
-async function handleStart(chatId, userMsgId = null) {
+async function handleStart(chatId, userMsgId = null, from = null) {
   await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
-  await replyEphemeral(
-    chatId,
-    '<b>Taneesh YouGile</b>\n' +
-      '<i>Sandbox → Нераспределённое</i>\n\n' +
-      '• <b>Новая задача</b> — пришли текст или войсик\n' +
-      '• Дальше: <b>Создать</b> или <b>Отменить</b>\n\n' +
-      STRUCTURE_GUIDE,
-    { reply_markup: mainKeyboard() },
-  );
+  if (isPrivateNotifyFrom(from) || PEOPLE.some((p) => p.privateNotify && Number(p.telegramId) === Number(chatId))) {
+    await replyEphemeral(
+      chatId,
+      '<b>Taneesh YouGile</b>\n' +
+        'Сюда приходят задачи, где ты <b>исполнитель</b>.\n\n' +
+        'В группу и остальным они не уходят — только тебе.\n' +
+        'Создавать задачи отсюда не нужно: работай в YouGile.',
+      { reply_markup: { remove_keyboard: true } },
+    );
+  } else {
+    await replyEphemeral(
+      chatId,
+      '<b>Taneesh YouGile</b>\n' +
+        '<i>Sandbox → Нераспределённое</i>\n\n' +
+        '• <b>Новая задача</b> — пришли текст или войсик\n' +
+        '• Дальше: <b>Создать</b> или <b>Отменить</b>\n\n' +
+        STRUCTURE_GUIDE,
+      { reply_markup: mainKeyboard() },
+    );
+  }
   // Команду /start сразу убираем из чата (остаётся только гайд)
   if (userMsgId != null) {
     await deleteTgMessage(chatId, userMsgId);
@@ -1375,10 +1436,14 @@ async function createFromDraft(chatId, draft) {
     creatorText,
   });
 
-  const notify = await notifyGroup(html, { reply_markup: createdTaskKeyboard(task.id) });
+  const skipTeam = shouldSkipTeamNotify(assigned);
+  const notify = skipTeam
+    ? { ok: true, sent: 0, errors: [], messages: [] }
+    : await notifyGroup(html, { reply_markup: createdTaskKeyboard(task.id) });
   rememberTaskMessages(task.id, notify.messages || []);
 
   // Исполнитель → только ему в личку (если уже указан при создании)
+  let pendingAssigned = [];
   if (assigned.length) {
     const toAssignees = await notifyAssigneesAssigned(assigned, {
       title: task.title || title,
@@ -1389,15 +1454,28 @@ async function createFromDraft(chatId, draft) {
       draft: ready,
     });
     rememberTaskMessages(task.id, toAssignees.messages || []);
+    pendingAssigned = toAssignees.pendingIds || [];
     if (!toAssignees.ok) {
       console.warn('assignee notify on create:', toAssignees.errors?.join('; ') || 'fail');
     }
   }
+  if (pendingAssigned.length) {
+    rememberTaskInState(
+      {
+        ...task,
+        assigned: (task.assigned || assigned).filter((id) => !pendingAssigned.includes(String(id))),
+      },
+      place.board,
+      place.column,
+    );
+  }
 
   const link = taskLink(env('YOUGILE_COMPANY_ID'), task.id);
-  const notifyLine = notify.ok
-    ? 'В группу отправил'
-    : `Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
+  const notifyLine = skipTeam
+    ? 'В группу не слал — только исполнителю в личку'
+    : notify.ok
+      ? 'В группу отправил'
+      : `Задача есть, но в группу не ушло: ${escapeHtml(notify.errors.join('; ') || 'нет chat_id')}`;
 
   await purgeEphemeral(chatId, { includeUser: true });
   sessions.delete(chatId);
@@ -1515,6 +1593,8 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
   }
 
   let sent = 0;
+  /** taskId → yougile user ids, которым ещё не ушла личка (нет /start). */
+  const pendingByTask = {};
 
   for (const [tid, info] of Object.entries(snap)) {
     const old = prev[tid];
@@ -1524,7 +1604,8 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
         if (!desc) {
           desc = await fetchTaskDescription(tid);
         }
-        if (!isBotCreatedDesc(desc)) {
+        const assignedNow = info.assigned || [];
+        if (!isBotCreatedDesc(desc) && !shouldSkipTeamNotify(assignedNow)) {
           const n = await notifyGroup(
             formatCreateNotify({
               title: info.title,
@@ -1539,7 +1620,6 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
           if (n.ok) sent += 1;
         }
         // Уже с исполнителем при появлении задачи — сразу в личку исполнителю
-        const assignedNow = info.assigned || [];
         if (assignedNow.length) {
           const a = await notifyAssigneesAssigned(assignedNow, {
             title: info.title,
@@ -1550,12 +1630,13 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
             description: desc,
           });
           if (a.sent) sent += a.sent;
+          if (a.pendingIds?.length) pendingByTask[tid] = a.pendingIds.map(String);
         }
       }
       continue;
     }
     const moved = old.columnId !== info.columnId || old.board !== info.board;
-    if (moved) {
+    if (moved && !shouldSkipTeamNotify(info.assigned || old.assigned)) {
       const detail =
         old.board !== info.board
           ? `${old.board}/${old.column || '?'} → ${info.board}/${info.column}`
@@ -1587,6 +1668,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
           description: desc,
         });
         if (a.sent) sent += a.sent;
+        if (a.pendingIds?.length) pendingByTask[tid] = a.pendingIds.map(String);
       }
     }
   }
@@ -1594,6 +1676,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
   if (!quietNew) {
     for (const [tid, old] of Object.entries(prev)) {
       if (snap[tid]) continue;
+      if (shouldSkipTeamNotify(old.assigned)) continue;
       const n = await notifyDm(
         formatActionNotify({
           action: 'Удаление',
@@ -1608,15 +1691,26 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
     }
   }
 
+  // Пока нет /start — не считаем assigned доставленным, на следующем тике повторим личку.
+  hydratePeopleTelegramIds();
+  for (const [tid, info] of Object.entries(snap)) {
+    const already = new Set(pendingByTask[tid] || []);
+    for (const p of peopleByYougileIds(info.assigned)) {
+      if (p.telegramId == null) already.add(String(p.yougileId));
+    }
+    if (already.size) pendingByTask[tid] = [...already];
+  }
+
   const next = { schema: 4, tasks: {}, baselinedAt: state.baselinedAt || new Date().toISOString() };
   for (const [tid, info] of Object.entries(snap)) {
+    const pending = new Set(pendingByTask[tid] || []);
     next.tasks[tid] = {
       board: info.board,
       column: info.column,
       columnId: info.columnId,
       title: info.title,
       code: info.code,
-      assigned: info.assigned || [],
+      assigned: (info.assigned || []).filter((id) => !pending.has(String(id))),
     };
   }
   saveState(next);
@@ -1862,6 +1956,19 @@ async function handleCallbackQuery(cq) {
   }
   rememberTelegramUser(from);
 
+  if (isPrivateNotifyFrom(from)) {
+    try {
+      await tg('answerCallbackQuery', {
+        callback_query_id: cq.id,
+        text: 'Задачи смотри в YouGile — бот только присылает карточки',
+        show_alert: true,
+      });
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+
   if (String(data).startsWith(CB_TASK_DEL_PREFIX)) {
     if (!isPrivateChat(cq.message?.chat) && !isGroupNotifyChat(chatId)) {
       try {
@@ -2017,7 +2124,16 @@ export async function handleYougileUpdate(update) {
 
   // /start team|... 
   if (/^\/start(?:@\w+)?(?:\s|$)/i.test(text) || text === '/help') {
-    await handleStart(chatId, msg.message_id);
+    await handleStart(chatId, msg.message_id, from);
+    return { ok: true };
+  }
+
+  if (isPrivateNotifyFrom(from)) {
+    await reply(
+      chatId,
+      'Сюда приходят задачи, где ты исполнитель.\nСоздавать задачи отсюда не нужно — работай в YouGile.',
+      { reply_markup: { remove_keyboard: true } },
+    );
     return { ok: true };
   }
 
