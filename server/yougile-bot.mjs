@@ -101,6 +101,15 @@ const PEOPLE = [
     /** Только личка исполнителю: не в группу и не в ops-чат. */
     privateNotify: true,
   },
+  {
+    key: 'timur',
+    names: ['тимур', 'timur'],
+    yougileId: 'bb0f7861-4d4f-4099-a370-137cbba0075c',
+    email: 'taneeshuz@gmail.com',
+    telegram: '@mundesign',
+    telegramId: 1696518783,
+    label: 'Тимур',
+  },
 ];
 
 /** Кто может пользоваться ботом в личке (текст / голос). */
@@ -873,11 +882,41 @@ function formatAssigneesPreview(keys) {
   return people.map((p) => `${p.label} (${p.telegram}, ${p.email})`).join('\n');
 }
 
-/** Короткие имена для превью в Telegram (как в гайде). */
+/** Тег в Telegram: @nick или tg://user?id=… чтобы реально пинговало. */
+function formatPersonMentionHtml(p) {
+  hydratePeopleTelegramIds();
+  const nick = String(p.telegram || '').replace(/^@/, '');
+  const at = nick ? `@${nick}` : p.label;
+  if (p.telegramId != null) {
+    return `<a href="tg://user?id=${Number(p.telegramId)}">${escapeHtml(at)}</a>`;
+  }
+  return escapeHtml(at);
+}
+
+/** Строка тегов исполнителей для шапки уведомления в группу. */
+function formatAssigneeMentionsLine(peopleOrKeys) {
+  const people = Array.isArray(peopleOrKeys)
+    ? typeof peopleOrKeys[0] === 'string'
+      ? peopleByKeys(peopleOrKeys)
+      : peopleOrKeys.filter(Boolean)
+    : [];
+  if (!people.length) return '';
+  return people.map(formatPersonMentionHtml).join(' ');
+}
+
+function formatAssigneesFromYougileIds(ids) {
+  const people = peopleByYougileIds(ids);
+  if (!people.length) return 'не назначен';
+  return people.map((p) => `${p.label} ${formatPersonMentionHtml(p)}`).join(' · ');
+}
+
+/** Короткие имена + кликабельный тег для превью / блока 8. */
 function formatAssigneesDraftLine(keys) {
   const people = peopleByKeys(keys);
   if (!people.length) return '<i>не назначен</i>';
-  return people.map((p) => `<b>${escapeHtml(p.label)}</b> ${escapeHtml(p.telegram)}`).join(' · ');
+  return people
+    .map((p) => `<b>${escapeHtml(p.label)}</b> ${formatPersonMentionHtml(p)}`)
+    .join(' · ');
 }
 
 function parseAssigneesFromText(text) {
@@ -925,13 +964,13 @@ function formatTaskBlocksHtml(draft) {
     '<b>2. Тип</b>\n' +
     `${formatTypeCodes(draft.type)}\n\n` +
     '<b>3. Контекст</b>\n' +
-    `<i>${escapeHtml(cutField(draft.context))}</i>\n\n` +
+    `<i>${escapeHtml(cutField(draft.context, 1500))}</i>\n\n` +
     '<b>4. Как сейчас</b>\n' +
-    `<i>${escapeHtml(cutField(draft.asNow))}</i>\n\n` +
+    `<i>${escapeHtml(cutField(draft.asNow, 1500))}</i>\n\n` +
     '<b>5. Как надо</b>\n' +
-    `<i>${escapeHtml(cutField(draft.asShould))}</i>\n\n` +
+    `<i>${escapeHtml(cutField(draft.asShould, 1500))}</i>\n\n` +
     '<b>6. Технически</b>\n' +
-    `<i>${escapeHtml(cutField(draft.tech))}</i>\n\n` +
+    `<i>${escapeHtml(cutField(draft.tech, 1500))}</i>\n\n` +
     '<b>7. Приоритет</b>\n' +
     `<code>${escapeHtml(prio.short || prio.label)}</code>\n\n` +
     '<b>8. Исполнитель</b>\n' +
@@ -939,6 +978,45 @@ function formatTaskBlocksHtml(draft) {
     `<i>Кто создал: ${escapeHtml(formatCreatorLine(draft))}</i>` +
     '</blockquote>'
   );
+}
+
+/** Разбор HTML-описания YouGile (шаблон бота) → поля для полной карточки. */
+function parseYougileTemplateFields(descriptionHtml) {
+  const raw = String(descriptionHtml || '');
+  const fields = {};
+  const re = /<p>\s*<b>\s*([^<]+?)\s*<\/b>\s*<\/p>\s*<p>([\s\S]*?)<\/p>/gi;
+  let m;
+  while ((m = re.exec(raw))) {
+    const key = htmlToText(m[1]).trim().toLowerCase();
+    const val = htmlToText(m[2]).trim();
+    if (key) fields[key] = val;
+  }
+  return fields;
+}
+
+function draftFromYougileTask({ title, description, assignedIds }) {
+  const f = parseYougileTemplateFields(description);
+  const prioRaw = (f['приоритет'] || '').toLowerCase();
+  let priority = 'normal';
+  if (prioRaw.includes('критич') || prioRaw.includes('critical')) priority = 'critical';
+  else if (prioRaw.includes('важн') || prioRaw.includes('major')) priority = 'major';
+  else if (prioRaw.includes('низк') || prioRaw.includes('low')) priority = 'low';
+
+  const people = peopleByYougileIds(assignedIds || []);
+  return {
+    title: title || f['название'] || '—',
+    type: f['тип'] || '—',
+    context: f['контекст'] || '—',
+    asNow: f['как сейчас'] || '—',
+    asShould: f['как надо'] || '—',
+    tech: f['технически'] || '—',
+    source: f['источник'] || '',
+    raw: '',
+    assigneeKeys: people.map((p) => p.key),
+    priority,
+    creatorLabel: f['кто создал'] || '',
+    creatorTelegram: '',
+  };
 }
 
 function formatCreateNotify({
@@ -950,6 +1028,7 @@ function formatCreateNotify({
   description,
   draft = null,
   assigneesText,
+  assignedIds = null,
   priorityLabel,
   creatorText,
 }) {
@@ -960,27 +1039,50 @@ function formatCreateNotify({
     : `<b>${escapeHtml(title || '—')}</b>`;
   const place = `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>`;
 
-  if (draft) {
+  let resolvedDraft = draft;
+  if (!resolvedDraft && description && /<p>\s*<b>/i.test(String(description))) {
+    resolvedDraft = draftFromYougileTask({
+      title,
+      description,
+      assignedIds: assignedIds || [],
+    });
+  }
+
+  const mentionPeople = resolvedDraft?.assigneeKeys?.length
+    ? peopleByKeys(resolvedDraft.assigneeKeys)
+    : peopleByYougileIds(assignedIds || []);
+  const mentions = formatAssigneeMentionsLine(mentionPeople);
+  const mentionHead = mentions ? `${mentions}\n\n` : '';
+
+  if (resolvedDraft) {
     return (
+      mentionHead +
       `${head}\n` +
       `${place}\n\n` +
-      formatTaskBlocksHtml(draft) +
-      (draft.source ? `\n\n<i>Источник: ${escapeHtml(dash(draft.source))}</i>` : '') +
+      formatTaskBlocksHtml(resolvedDraft) +
+      (resolvedDraft.source
+        ? `\n\n<i>Источник: ${escapeHtml(dash(resolvedDraft.source))}</i>`
+        : '') +
       `\n\n${link}`
     );
   }
 
-  // Синк чужих задач без draft — короткая карточка
+  // Синк чужих задач без шаблона — полное описание + теги
   const prio = escapeHtml(priorityLabel || '—');
   let body = htmlToText(stripMarkerFromDesc(description));
-  if (body.length > 1200) body = `${body.slice(0, 1200)}…`;
+  if (body.length > 3500) body = `${body.slice(0, 3500)}…`;
+  const assigneesHtml =
+    assigneesText != null && assigneesText !== 'не назначен'
+      ? assigneesText
+      : formatAssigneesFromYougileIds(assignedIds || []);
   return (
+    mentionHead +
     `${head}\n` +
     `${place}\n\n` +
     '<blockquote>' +
     `<b>Приоритет</b>\n<code>${prio}</code>\n\n` +
     `<b>Кто создал</b>\n<i>${escapeHtml(creatorText || '—')}</i>\n\n` +
-    `<b>Исполнитель</b>\n<i>${escapeHtml(assigneesText || 'не назначен')}</i>\n\n` +
+    `<b>Исполнитель</b>\n${assigneesHtml}\n\n` +
     `<b>Описание</b>\n<i>${escapeHtml(body || '—')}</i>` +
     '</blockquote>\n\n' +
     link
@@ -1614,7 +1716,7 @@ export async function syncYougileOnce({ quietNew = false } = {}) {
               board: info.board,
               column: info.column,
               description: desc,
-              assigneesText: 'не назначен',
+              assignedIds: assignedNow,
             }),
           );
           if (n.ok) sent += 1;
