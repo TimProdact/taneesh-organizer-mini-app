@@ -44,13 +44,21 @@ function readPhotoAsDataUrl(file) {
 }
 
 function blankTicket() {
-  return { id: uid('t'), name: '', price: 0, originalPrice: 0, capacity: 100 };
+  return { id: uid('t'), name: '', price: 0, originalPrice: 0, capacity: 100, seatsPerTicket: 1 };
+}
+
+function ticketGuestsMode(seatsPerTicket) {
+  const n = Math.max(1, Math.floor(Number(seatsPerTicket) || 1));
+  if (n === 1) return '1';
+  if (n === 2) return '2';
+  return 'custom';
 }
 
 function ticketsValid(list) {
   if (!list.length) return false;
   return list.every((t) => {
     if (!t.name.trim() || Number(t.price) <= 0 || Number(t.capacity) <= 0) return false;
+    if (!(Number(t.seatsPerTicket) >= 1)) return false;
     const orig = Number(t.originalPrice) || 0;
     if (orig > 0 && orig <= Number(t.price)) return false;
     return true;
@@ -120,6 +128,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
               price: t.price || 0,
               originalPrice: t.originalPrice || 0,
               capacity: t.capacity || 0,
+              seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
             }))
           : [],
       );
@@ -291,6 +300,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
               capacity: Math.max(0, Number(t.capacity) || 0),
               originalPrice: originalPrice > price ? originalPrice : undefined,
               discountLabel: label || undefined,
+              seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
             };
           });
 
@@ -545,6 +555,46 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                           value={t.capacity || ''}
                           onChange={(e) => updateTicket(t.id, { capacity: Number(e.target.value) || 0 })}
                         />
+                        <div className="fm-segment-wrap">
+                          <p className="fm-field-label">Гости на билет</p>
+                          <SegmentedControl>
+                            <SegmentedControl.Item
+                              selected={ticketGuestsMode(t.seatsPerTicket) === '1'}
+                              onClick={() => updateTicket(t.id, { seatsPerTicket: 1 })}
+                            >
+                              Одиночный
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item
+                              selected={ticketGuestsMode(t.seatsPerTicket) === '2'}
+                              onClick={() => updateTicket(t.id, { seatsPerTicket: 2 })}
+                            >
+                              Парный
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item
+                              selected={ticketGuestsMode(t.seatsPerTicket) === 'custom'}
+                              onClick={() => {
+                                const current = Math.max(1, Math.floor(Number(t.seatsPerTicket) || 3));
+                                updateTicket(t.id, { seatsPerTicket: current >= 3 ? current : 3 });
+                              }}
+                            >
+                              Своё
+                            </SegmentedControl.Item>
+                          </SegmentedControl>
+                        </div>
+                        {ticketGuestsMode(t.seatsPerTicket) === 'custom' ? (
+                          <Input
+                            header="Количество гостей"
+                            type="number"
+                            inputMode="numeric"
+                            min={3}
+                            max={10}
+                            placeholder="3"
+                            value={t.seatsPerTicket || ''}
+                            onChange={(e) =>
+                              updateTicket(t.id, { seatsPerTicket: Number(e.target.value) || 0 })
+                            }
+                          />
+                        ) : null}
                         {disc ? (
                           <p className="fm-ticket-discount-badge">Скидка {disc}</p>
                         ) : (
@@ -638,7 +688,11 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                       <ValueRow
                         key={t.id}
                         label={t.name || `Билет ${i + 1}`}
-                        value={`${Number(t.price).toLocaleString('ru-RU')} UZS · ${t.capacity} шт.${
+                        value={`${Number(t.price).toLocaleString('ru-RU')} UZS · ${t.capacity} шт. · ${
+                          Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)) === 2
+                            ? 'пара (2 гостя)'
+                            : `${Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1))} гост./билет`
+                        }${
                           ticketDiscountLabel(t.price, t.originalPrice)
                             ? ` · ${ticketDiscountLabel(t.price, t.originalPrice)}`
                             : ''

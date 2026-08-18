@@ -162,6 +162,7 @@ function normalizeTickets(tickets, isFree) {
         ? Number(t.originalPrice)
         : undefined,
     discountLabel: t.discountLabel ? String(t.discountLabel) : undefined,
+    seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
   }));
 }
 
@@ -320,7 +321,7 @@ function defaultStore() {
     interests: ['Tech', 'Программирование'],
     tickets: [
       { id: 't1', name: 'Standard', price: 150000, originalPrice: 200000, capacity: 200, sold: 80, discountLabel: '-25%' },
-      { id: 't2', name: 'VIP', price: 450000, capacity: 50, sold: 12 },
+      { id: 't2', name: 'VIP', price: 450000, capacity: 50, sold: 12, seatsPerTicket: 2 },
     ],
     i18n: {
       title: { ru: 'Tashkent Tech Night', uz: '', en: '' },
