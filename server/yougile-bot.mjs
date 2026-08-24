@@ -1039,53 +1039,44 @@ function formatCreateNotify({
     : `<b>${escapeHtml(title || '—')}</b>`;
   const place = `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>`;
 
-  let resolvedDraft = draft;
-  if (!resolvedDraft && description && /<p>\s*<b>/i.test(String(description))) {
-    resolvedDraft = draftFromYougileTask({
-      title,
-      description,
-      assignedIds: assignedIds || [],
-    });
-  }
-
-  const mentionPeople = resolvedDraft?.assigneeKeys?.length
-    ? peopleByKeys(resolvedDraft.assigneeKeys)
+  const mentionPeople = draft?.assigneeKeys?.length
+    ? peopleByKeys(draft.assigneeKeys)
     : peopleByYougileIds(assignedIds || []);
   const mentions = formatAssigneeMentionsLine(mentionPeople);
   const mentionHead = mentions ? `${mentions}\n\n` : '';
 
-  if (resolvedDraft) {
-    return (
-      mentionHead +
-      `${head}\n` +
-      `${place}\n\n` +
-      formatTaskBlocksHtml(resolvedDraft) +
-      (resolvedDraft.source
-        ? `\n\n<i>Источник: ${escapeHtml(dash(resolvedDraft.source))}</i>`
-        : '') +
-      `\n\n${link}`
-    );
-  }
-
-  // Синк чужих задач без шаблона — полное описание + теги
-  const prio = escapeHtml(priorityLabel || '—');
-  let body = htmlToText(stripMarkerFromDesc(description));
-  if (body.length > 3500) body = `${body.slice(0, 3500)}…`;
   const assigneesHtml =
     assigneesText != null && assigneesText !== 'не назначен'
       ? assigneesText
       : formatAssigneesFromYougileIds(assignedIds || []);
+
+  // Текст задачи = описание из YouGile (или собранное из черновика бота).
+  // Не разворачиваем в шаблон «1–8» — в Telegram уходит живой текст.
+  let body = '';
+  if (description) {
+    body = htmlToText(stripMarkerFromDesc(description));
+  } else if (draft) {
+    body = htmlToText(stripMarkerFromDesc(buildTemplateDescription(draft)));
+  }
+  body = String(body || '').trim();
+  if (body.length > 3500) body = `${body.slice(0, 3500)}…`;
+
+  const meta = [];
+  if (priorityLabel && priorityLabel !== '—') {
+    meta.push(`<b>Приоритет:</b> <code>${escapeHtml(priorityLabel)}</code>`);
+  }
+  if (creatorText && creatorText !== '—') {
+    meta.push(`<b>Кто создал:</b> <i>${escapeHtml(creatorText)}</i>`);
+  }
+  meta.push(`<b>Исполнитель:</b> ${assigneesHtml}`);
+
   return (
     mentionHead +
     `${head}\n` +
     `${place}\n\n` +
-    '<blockquote>' +
-    `<b>Приоритет</b>\n<code>${prio}</code>\n\n` +
-    `<b>Кто создал</b>\n<i>${escapeHtml(creatorText || '—')}</i>\n\n` +
-    `<b>Исполнитель</b>\n${assigneesHtml}\n\n` +
-    `<b>Описание</b>\n<i>${escapeHtml(body || '—')}</i>` +
-    '</blockquote>\n\n' +
-    link
+    (body ? `${escapeHtml(body)}\n\n` : '') +
+    meta.join('\n') +
+    `\n\n${link}`
   );
 }
 
@@ -1471,13 +1462,15 @@ function formatCreatedReply({
   const codeLine = code
     ? `<code>${escapeHtml(code)}</code> · <b>${escapeHtml(title || '—')}</b>`
     : `<b>${escapeHtml(title || '—')}</b>`;
+  let body = htmlToText(stripMarkerFromDesc(buildTemplateDescription(draft || {})));
+  body = String(body || '').trim();
+  if (body.length > 3500) body = `${body.slice(0, 3500)}…`;
   return (
     '<b>✅ Создано</b>\n' +
     `${codeLine}\n` +
     `<i>${escapeHtml(board)} / ${escapeHtml(column)}</i>\n\n` +
-    formatTaskBlocksHtml(draft) +
-    (draft?.source ? `\n\n<i>Источник: ${escapeHtml(dash(draft.source))}</i>` : '') +
-    `\n\n<i>${notifyLine}</i>\n` +
+    (body ? `${escapeHtml(body)}\n\n` : '') +
+    `<i>${notifyLine}</i>\n` +
     `<a href="${link}">Открыть в YouGile</a>`
   );
 }
