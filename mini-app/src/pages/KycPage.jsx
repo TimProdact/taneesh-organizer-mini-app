@@ -1,4 +1,5 @@
-import { Banner, Button, List, Placeholder } from '@telegram-apps/telegram-ui';
+import { useState } from 'react';
+import { Banner, Button, Input, List, Placeholder } from '@telegram-apps/telegram-ui';
 import { PageHeader, SubpageLayout } from '../components/PageLayout.jsx';
 import { runActionSafe, showError } from '../api.js';
 
@@ -27,18 +28,36 @@ const COPY = {
   },
 };
 
+function digits(s) {
+  return String(s || '').replace(/\D/g, '');
+}
+
 export function KycPage({ snapshot, onSnapshotChange }) {
   const status = snapshot.profile?.kycStatus || (snapshot.profile?.verified ? 'approved' : 'idle');
   const copy = COPY[status] || COPY.idle;
+  const [inn, setInn] = useState(snapshot.profile?.inn || '');
+  const [ikpu, setIkpu] = useState(snapshot.profile?.ikpu || '');
 
   const submit = async () => {
+    const innD = digits(inn);
+    const ikpuD = digits(ikpu);
+    if (innD && innD.length !== 9) {
+      showError('ИНН — 9 цифр');
+      return;
+    }
+    if (ikpuD && ikpuD.length !== 17) {
+      showError('ИКПУ — 17 цифр');
+      return;
+    }
     try {
-      const next = await runActionSafe('submit_kyc', {});
+      const next = await runActionSafe('submit_kyc', { inn: innD, ikpu: ikpuD });
       onSnapshotChange(next);
     } catch (e) {
       showError(e.message || 'Не удалось отправить');
     }
   };
+
+  const canEdit = status === 'idle' || status === 'rejected';
 
   return (
     <SubpageLayout>
@@ -51,10 +70,30 @@ export function KycPage({ snapshot, onSnapshotChange }) {
             </Button>
           ) : null}
         </Banner>
-        {status === 'idle' || status === 'rejected' ? (
+        {canEdit ? (
+          <>
+            <Input
+              header="ИНН"
+              inputMode="numeric"
+              placeholder="9 цифр"
+              value={inn}
+              onChange={(e) => setInn(digits(e.target.value).slice(0, 9))}
+            />
+            <Input
+              header="ИКПУ"
+              inputMode="numeric"
+              placeholder="17 цифр"
+              value={ikpu}
+              onChange={(e) => setIkpu(digits(e.target.value).slice(0, 17))}
+            />
+          </>
+        ) : snapshot.profile?.inn || snapshot.profile?.ikpu ? (
           <Placeholder
-            header="Форма ИП / ООО / самозанятый"
-            description="Полная анкета и загрузка документов — как в веб-админке; подключим к API Taneesh."
+            header={status === 'approved' ? 'Реквизиты сохранены' : 'На проверке'}
+            description={[
+              snapshot.profile?.inn ? `ИНН ${snapshot.profile.inn}` : null,
+              snapshot.profile?.ikpu ? `ИКПУ ${snapshot.profile.ikpu}` : null,
+            ].filter(Boolean).join(' · ')}
           />
         ) : null}
       </List>

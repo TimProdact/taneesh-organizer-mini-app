@@ -149,21 +149,43 @@ function emptyMetrics(isFree, freeEntryMode) {
   };
 }
 
-function normalizeTickets(tickets, isFree) {
-  if (isFree) return [];
-  return (Array.isArray(tickets) ? tickets : []).map((t) => ({
-    id: String(t.id || `t-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`),
-    name: String(t.name || '').trim(),
-    price: Math.max(0, Number(t.price) || 0),
-    capacity: Math.max(0, Number(t.capacity) || 0),
-    sold: Math.max(0, Number(t.sold) || 0),
-    originalPrice:
-      t.originalPrice != null && Number(t.originalPrice) > Number(t.price)
-        ? Number(t.originalPrice)
-        : undefined,
-    discountLabel: t.discountLabel ? String(t.discountLabel) : undefined,
-    seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
-  }));
+function resolveTicketMode(payload, existing, isFreeHint) {
+  const raw = payload.ticketMode || existing?.ticketMode;
+  if (raw === 'free' || raw === 'paid' || raw === 'at_door') return raw;
+  if (isFreeHint) return 'free';
+  const tickets = payload.tickets != null ? payload.tickets : existing?.tickets;
+  const list = Array.isArray(tickets) ? tickets : [];
+  if (list.length && list.every((t) => t?.paymentMode === 'at_door')) return 'at_door';
+  return 'paid';
+}
+
+function normalizeTickets(tickets, ticketMode) {
+  if (ticketMode === 'free') return [];
+  return (Array.isArray(tickets) ? tickets : []).map((t, index) => {
+    const price = Math.max(0, Number(t.price) || 0);
+    const orig = Number(t.originalPrice);
+    const minAge = t.minAge == null || t.minAge === '' ? undefined : Number(t.minAge);
+    const paymentMode =
+      ticketMode === 'at_door' ? 'at_door' : t.paymentMode === 'at_door' ? 'at_door' : 'online';
+    return {
+      id: String(t.id || `t-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`),
+      name: String(t.name || '').trim(),
+      price,
+      capacity: Math.max(0, Number(t.capacity) || 0),
+      sold: Math.max(0, Number(t.sold) || 0),
+      originalPrice: orig > price ? orig : undefined,
+      discountLabel: t.discountLabel ? String(t.discountLabel) : undefined,
+      seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
+      description: String(t.description || '').trim() || undefined,
+      paymentMode,
+      audienceGender:
+        t.audienceGender === 'female' || t.audienceGender === 'male' ? t.audienceGender : 'any',
+      minAge: Number.isFinite(minAge) ? minAge : undefined,
+      salesStartDatetime: t.salesStartDatetime || undefined,
+      hidden: t.hidden === true,
+      sortOrder: t.sortOrder != null ? Number(t.sortOrder) : index,
+    };
+  });
 }
 
 function buildEventRecord(payload, existing = null) {
@@ -172,16 +194,20 @@ function buildEventRecord(payload, existing = null) {
     payload.endsAt ||
     existing?.endsAt ||
     new Date(new Date(startsAt).getTime() + 3 * 3600_000).toISOString();
-  const isFree = payload.isFree != null ? payload.isFree !== false : existing?.isFree !== false;
+  const isFreeHint = payload.isFree != null ? payload.isFree !== false : existing?.isFree !== false;
+  const ticketMode = resolveTicketMode(payload, existing, isFreeHint);
+  const isFree = ticketMode === 'free';
   const status =
     payload.status != null
-      ? payload.status === 'draft'
-        ? 'draft'
-        : 'published'
+      ? payload.status === 'cancelled'
+        ? 'cancelled'
+        : payload.status === 'draft'
+          ? 'draft'
+          : 'published'
       : existing?.status || 'published';
   const tickets = normalizeTickets(
     payload.tickets != null ? payload.tickets : existing?.tickets,
-    isFree,
+    ticketMode,
   );
   let ticketsLeft = existing?.ticketsLeft ?? null;
   let ticketsTotal = existing?.ticketsTotal ?? null;
@@ -227,6 +253,7 @@ function buildEventRecord(payload, existing = null) {
     endsAt,
     location: {
       name: String(payload.location?.name ?? existing?.location?.name ?? '').trim(),
+      city: String(payload.location?.city ?? existing?.location?.city ?? '').trim(),
       address: String(payload.location?.address ?? existing?.location?.address ?? '').trim(),
     },
     interests:
@@ -236,6 +263,7 @@ function buildEventRecord(payload, existing = null) {
           : []
         : existing?.interests || [],
     isFree,
+    ticketMode,
     freeEntryMode,
     tickets,
     ticketsLeft,
@@ -243,12 +271,14 @@ function buildEventRecord(payload, existing = null) {
     status,
     paused: existing?.paused ?? false,
     phase:
-      status === 'draft'
-        ? 'draft'
-        : existing?.phase && existing.phase !== 'draft'
-          ? existing.phase
-          : 'upcoming',
-    visible: payload.visible != null ? payload.visible : status !== 'draft',
+      status === 'cancelled'
+        ? 'cancelled'
+        : status === 'draft'
+          ? 'draft'
+          : existing?.phase && existing.phase !== 'draft' && existing.phase !== 'cancelled'
+            ? existing.phase
+            : 'upcoming',
+    visible: payload.visible != null ? payload.visible : status !== 'draft' && status !== 'cancelled',
     metrics: existing?.metrics || emptyMetrics(isFree, freeEntryMode),
     attendees: existing?.attendees || [],
     sales: existing?.sales || [],
@@ -266,7 +296,7 @@ function defaultStore() {
     isFree: true,
     freeEntryMode: 'approval',
     status: 'published',
-    location: { name: 'Magic City', address: 'Ташкент, ул. Бабура 6' },
+    location: { name: 'Magic City', city: 'Ташкент', address: 'ул. Бабура 6' },
     interests: ['Business', 'Нетворкинг'],
     i18n: {
       title: { ru: 'Demo Event', uz: '', en: '' },
@@ -288,6 +318,7 @@ function defaultStore() {
       contact: '+998 90 123 45 67',
       channel: 'phone',
       type: 'pending',
+      source: 'registered',
       checkIn: 'waiting',
     },
     {
@@ -296,6 +327,7 @@ function defaultStore() {
       contact: 'malika@example.com',
       channel: 'email',
       type: 'approved',
+      source: 'registered',
       checkIn: 'waiting',
     },
     {
@@ -304,6 +336,7 @@ function defaultStore() {
       contact: '+998 91 777 88 99',
       channel: 'phone',
       type: 'invited',
+      source: 'invited',
       checkIn: 'waiting',
     },
   ];
@@ -317,11 +350,34 @@ function defaultStore() {
     endsAt: paidEnds,
     isFree: false,
     status: 'published',
-    location: { name: 'IT Park', address: 'Ташкент' },
+    location: { name: 'IT Park', city: 'Ташкент', address: 'ул. Бабура 174' },
     interests: ['Tech', 'Программирование'],
+    ticketMode: 'paid',
     tickets: [
-      { id: 't1', name: 'Standard', price: 150000, originalPrice: 200000, capacity: 200, sold: 80, discountLabel: '-25%' },
-      { id: 't2', name: 'VIP', price: 450000, capacity: 50, sold: 12, seatsPerTicket: 2 },
+      {
+        id: 't1',
+        name: 'Standard',
+        price: 150000,
+        originalPrice: 200000,
+        capacity: 200,
+        sold: 80,
+        discountLabel: '-25%',
+        paymentMode: 'online',
+        audienceGender: 'any',
+        description: 'Вход и гардероб',
+      },
+      {
+        id: 't2',
+        name: 'VIP',
+        price: 450000,
+        capacity: 50,
+        sold: 12,
+        seatsPerTicket: 2,
+        paymentMode: 'at_door',
+        audienceGender: 'any',
+        minAge: 18,
+        description: 'Отдельная зона',
+      },
     ],
     i18n: {
       title: { ru: 'Tashkent Tech Night', uz: '', en: '' },
@@ -337,7 +393,10 @@ function defaultStore() {
       name: 'Дилноза Рахимова',
       contact: 'dilnoza@mail.uz',
       channel: 'email',
-      type: 'Standard',
+      type: 'approved',
+      source: 'purchased',
+      ticketTypeId: 't1',
+      ticketName: 'Standard',
       orderId: 'ORD-1001',
       checkIn: 'entered',
     },
@@ -346,7 +405,10 @@ function defaultStore() {
       name: 'Жасур Алиев',
       contact: '+998 93 111 22 33',
       channel: 'phone',
-      type: 'VIP',
+      type: 'approved',
+      source: 'purchased',
+      ticketTypeId: 't2',
+      ticketName: 'VIP',
       orderId: 'ORD-1002',
       checkIn: 'waiting',
     },
@@ -552,6 +614,7 @@ export async function runAction(adminAction, payload = {}) {
       if (payload.location != null) {
         event.location = {
           name: String(payload.location.name || '').trim(),
+          city: String(payload.location.city ?? event.location?.city ?? '').trim(),
           address: String(payload.location.address || '').trim(),
         };
       }
@@ -571,15 +634,25 @@ export async function runAction(adminAction, payload = {}) {
     const channel = payload.channel === 'email' ? 'email' : 'phone';
     if (!name) throw new Error('Укажите имя');
     if (!contact) throw new Error('Укажите контакт');
+    const tickets = event.tickets || [];
+    const ticketMode = event.ticketMode || (event.isFree ? 'free' : 'paid');
+    let ticket = null;
+    if (ticketMode !== 'free') {
+      ticket = tickets.find((t) => String(t.id) === String(payload.ticketTypeId)) || tickets[0];
+      if (!ticket) throw new Error('Выберите тариф');
+    }
     event.attendees = event.attendees || [];
     event.attendees.unshift({
       id: `inv-${Date.now()}`,
       name,
       contact,
       channel,
-      type: event.isFree ? 'invited' : 'Invited',
+      type: 'invited',
+      source: 'invited',
+      ticketTypeId: ticket?.id,
+      ticketName: ticket?.name,
       checkIn: 'waiting',
-      orderId: event.isFree ? undefined : `ORD-${Math.floor(Math.random() * 9000 + 1000)}`,
+      orderId: ticketMode === 'free' ? undefined : `ORD-${Math.floor(Math.random() * 9000 + 1000)}`,
     });
     refreshMeta();
     return getSnapshot();
@@ -592,12 +665,113 @@ export async function runAction(adminAction, payload = {}) {
     if (!att) throw new Error('Участник не найден');
     const action = payload.action;
     if (action === 'approve') att.type = 'approved';
-    else if (action === 'decline') {
+    else if (action === 'decline') att.type = 'declined';
+    else if (action === 'pending') att.type = 'pending';
+    else if (action === 'check_in') att.checkIn = 'entered';
+    else if (action === 'cancel_invite') {
       event.attendees = event.attendees.filter((a) => a.id !== att.id);
-    } else if (action === 'check_in') att.checkIn = 'entered';
-    else if (action === 'cancel_invite' || action === 'cancel_approval') {
-      event.attendees = event.attendees.filter((a) => a.id !== att.id);
+    } else if (action === 'cancel_approval') {
+      att.type = 'pending';
+    } else if (action === 'cancel_ticket' || action === 'refund') {
+      att.type = action === 'refund' ? 'declined' : att.type;
+      att.checkIn = 'waiting';
+      att.refunded = action === 'refund';
+      const orderId = att.orderId;
+      if (orderId && event.sales) {
+        const sale = event.sales.find((s) => s.id === orderId || s.orderId === orderId || s.buyer === att.contact);
+        if (sale && action === 'refund') sale.status = 'refunded';
+      }
     }
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'update_ticket') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    if (event.ticketMode === 'free' || event.isFree) throw new Error('Нет тарифов');
+    const ticket = (event.tickets || []).find((t) => String(t.id) === String(payload.ticketId));
+    if (!ticket) throw new Error('Тариф не найден');
+    const sold = Math.max(0, Number(ticket.sold) || 0);
+    const patch = payload.ticket || payload;
+    if (patch.name != null) ticket.name = String(patch.name).trim() || ticket.name;
+    if (patch.description != null) ticket.description = String(patch.description).trim() || undefined;
+    if (patch.price != null) {
+      const price = Number(patch.price);
+      if (!(price > 0)) throw new Error('Укажите цену');
+      ticket.price = price;
+    }
+    if (patch.originalPrice != null) {
+      const orig = Number(patch.originalPrice) || 0;
+      ticket.originalPrice = orig > ticket.price ? orig : undefined;
+    }
+    if (patch.capacity != null) {
+      const cap = Number(patch.capacity);
+      if (!(cap >= sold)) throw new Error(`Количество не меньше проданных (${sold})`);
+      ticket.capacity = cap;
+    }
+    if (patch.seatsPerTicket != null) {
+      ticket.seatsPerTicket = Math.max(1, Math.floor(Number(patch.seatsPerTicket) || 1));
+    }
+    if (patch.paymentMode === 'online' || patch.paymentMode === 'at_door') {
+      ticket.paymentMode = event.ticketMode === 'at_door' ? 'at_door' : patch.paymentMode;
+    }
+    if (patch.audienceGender != null) {
+      ticket.audienceGender =
+        patch.audienceGender === 'female' || patch.audienceGender === 'male'
+          ? patch.audienceGender
+          : 'any';
+    }
+    if (patch.minAge !== undefined) {
+      const n = patch.minAge === '' || patch.minAge == null ? undefined : Number(patch.minAge);
+      ticket.minAge = Number.isFinite(n) ? n : undefined;
+    }
+    if (patch.salesStartDatetime !== undefined) {
+      ticket.salesStartDatetime = patch.salesStartDatetime || undefined;
+    }
+    if (patch.hidden != null) ticket.hidden = patch.hidden === true;
+    const orig = Number(ticket.originalPrice) || 0;
+    if (orig > ticket.price) {
+      ticket.discountLabel = `-${Math.round((1 - ticket.price / orig) * 100)}%`;
+    } else {
+      ticket.originalPrice = undefined;
+      ticket.discountLabel = undefined;
+    }
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'reorder_tickets') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    const ids = Array.isArray(payload.ticketIds) ? payload.ticketIds.map(String) : [];
+    const byId = new Map((event.tickets || []).map((t) => [String(t.id), t]));
+    const next = ids.map((id) => byId.get(id)).filter(Boolean);
+    for (const t of event.tickets || []) {
+      if (!ids.includes(String(t.id))) next.push(t);
+    }
+    event.tickets = next.map((t, i) => ({ ...t, sortOrder: i }));
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'cancel_event') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    event.status = 'cancelled';
+    event.phase = 'cancelled';
+    event.visible = false;
+    event.paused = true;
+    refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'refund_sale') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    const sale = (event.sales || []).find((s) => String(s.id) === String(payload.saleId));
+    if (!sale) throw new Error('Продажа не найдена');
+    sale.status = 'refunded';
     refreshMeta();
     return getSnapshot();
   }
@@ -613,8 +787,12 @@ export async function runAction(adminAction, payload = {}) {
   }
 
   if (adminAction === 'submit_kyc') {
+    const inn = String(payload.inn ?? store.profile?.inn ?? '').replace(/\D/g, '');
+    const ikpu = String(payload.ikpu ?? store.profile?.ikpu ?? '').replace(/\D/g, '');
     store.profile = {
       ...store.profile,
+      inn: inn || undefined,
+      ikpu: ikpu || undefined,
       kycStatus: 'pending',
       verified: false,
     };

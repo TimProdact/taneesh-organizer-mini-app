@@ -13,7 +13,7 @@ import { ValueGroup } from '../components/ValueGroup.jsx';
 import { ValueRow } from '../components/ValueRow.jsx';
 import { BottomSheet } from '../components/BottomSheet.jsx';
 import { formatPrice } from '../utils.js';
-import { copyText, haptic, showError } from '../api.js';
+import { copyText, haptic, runActionSafe, showError } from '../api.js';
 
 function formatSaleDate(iso) {
   if (!iso) return '—';
@@ -25,7 +25,7 @@ function formatSaleDate(iso) {
   });
 }
 
-export function EventSalesPage({ snapshot, eventId }) {
+export function EventSalesPage({ snapshot, onSnapshotChange, eventId }) {
   const event = useMemo(() => {
     const list = snapshot.events || [];
     return list.find((e) => e.id === eventId) || {};
@@ -127,14 +127,35 @@ export function EventSalesPage({ snapshot, eventId }) {
               </Button>
             ) : null}
             {selected.status === 'paid' ? (
-              <Button
-                mode="filled"
-                size="l"
-                stretched
-                onClick={() => showError('Фискальный чек подключим к API Paylov')}
-              >
-                Фискальный чек
-              </Button>
+              <>
+                <Button
+                  mode="outline"
+                  size="l"
+                  stretched
+                  onClick={async () => {
+                    try {
+                      const next = await runActionSafe('refund_sale', {
+                        eventId: event.id,
+                        saleId: selected.id,
+                      });
+                      onSnapshotChange?.(next);
+                      setSelectedId(null);
+                    } catch {
+                      /* alerted */
+                    }
+                  }}
+                >
+                  Возврат
+                </Button>
+                <Button
+                  mode="filled"
+                  size="l"
+                  stretched
+                  onClick={() => showError('Фискальный чек подключим к API Paylov')}
+                >
+                  Фискальный чек
+                </Button>
+              </>
             ) : (
               <p className="fm-empty-hint">По возврату чек недоступен</p>
             )}

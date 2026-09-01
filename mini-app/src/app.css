@@ -2101,6 +2101,22 @@ button.fm-entity-row {
   gap: 12px;
 }
 
+.fm-ticket-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fm-ticket-order {
+  border: none;
+  background: transparent;
+  color: var(--tg-theme-subtitle-text-color, #8a8a8a);
+  font-size: 16px;
+  font-weight: 700;
+  padding: 0 4px;
+  cursor: pointer;
+}
+
 .fm-ticket-card-title {
   font-size: 15px;
   font-weight: 650;

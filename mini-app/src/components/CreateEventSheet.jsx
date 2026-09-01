@@ -5,12 +5,15 @@ import { DateTimePickerSheet, formatEventDateTime, partsToIso, toLocalParts } fr
 import { ValueGroup } from './ValueGroup.jsx';
 import { ValueRow, SwitchRow } from './ValueRow.jsx';
 import { haptic, runActionSafe, showError } from '../api.js';
+import { EVENT_INTERESTS, emptyI18n } from '../config/eventInterests.js';
+import { TicketCardFields } from './TicketCardFields.jsx';
 import {
-  EVENT_INTERESTS,
-  emptyI18n,
-  ticketDiscountLabel,
-  uid,
-} from '../config/eventInterests.js';
+  blankTicket,
+  formTicketFromEvent,
+  serializeTickets,
+  ticketModeOf,
+  ticketsValid,
+} from '../config/ticketFields.js';
 
 const STEPS = 7;
 
@@ -43,28 +46,6 @@ function readPhotoAsDataUrl(file) {
   });
 }
 
-function blankTicket() {
-  return { id: uid('t'), name: '', price: 0, originalPrice: 0, capacity: 100, seatsPerTicket: 1 };
-}
-
-function ticketGuestsMode(seatsPerTicket) {
-  const n = Math.max(1, Math.floor(Number(seatsPerTicket) || 1));
-  if (n === 1) return '1';
-  if (n === 2) return '2';
-  return 'custom';
-}
-
-function ticketsValid(list) {
-  if (!list.length) return false;
-  return list.every((t) => {
-    if (!t.name.trim() || Number(t.price) <= 0 || Number(t.capacity) <= 0) return false;
-    if (!(Number(t.seatsPerTicket) >= 1)) return false;
-    const orig = Number(t.originalPrice) || 0;
-    if (orig > 0 && orig <= Number(t.price)) return false;
-    return true;
-  });
-}
-
 export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChange, onClose }) {
   const fileRef = useRef(null);
   const carouselRef = useRef(null);
@@ -86,12 +67,15 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [locationCity, setLocationCity] = useState('');
   const [locationAddress, setLocationAddress] = useState('');
   const [interests, setInterests] = useState([]);
   const [interestQuery, setInterestQuery] = useState('');
-  const [isFree, setIsFree] = useState(true);
+  const [ticketMode, setTicketMode] = useState('free');
   const [freeEntryMode, setFreeEntryMode] = useState('approval');
   const [tickets, setTickets] = useState([]);
+  const [salesTicketId, setSalesTicketId] = useState(null);
+  const isFree = ticketMode === 'free';
 
   useEffect(() => {
     if (!open) return;
@@ -115,21 +99,16 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
       setStartsAt(event.startsAt || defaultStartEnd().start);
       setEndsAt(event.endsAt || defaultStartEnd().end);
       setLocationName(event.location?.name || '');
+      setLocationCity(event.location?.city || '');
       setLocationAddress(event.location?.address || '');
       setInterests([...(event.interests || [])]);
       setInterestQuery('');
-      setIsFree(event.isFree !== false);
+      const mode = ticketModeOf(event);
+      setTicketMode(mode);
       setFreeEntryMode(event.freeEntryMode === 'open' ? 'open' : 'approval');
       setTickets(
-        event.isFree === false && (event.tickets || []).length
-          ? event.tickets.map((t) => ({
-              id: t.id || uid('t'),
-              name: t.name || '',
-              price: t.price || 0,
-              originalPrice: t.originalPrice || 0,
-              capacity: t.capacity || 0,
-              seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
-            }))
+        mode !== 'free' && (event.tickets || []).length
+          ? event.tickets.map((t) => formTicketFromEvent(t, mode))
           : [],
       );
       return;
@@ -146,10 +125,11 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
     setStartsAt(start);
     setEndsAt(end);
     setLocationName('');
+    setLocationCity('');
     setLocationAddress('');
     setInterests([]);
     setInterestQuery('');
-    setIsFree(true);
+    setTicketMode('free');
     setFreeEntryMode('approval');
     setTickets([]);
   }, [open, isEdit, event]);
@@ -231,18 +211,43 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
     );
   };
 
-  const setPaid = () => {
-    if (!verified) {
+  const applyTicketMode = (mode) => {
+    if (mode === 'paid' && !verified) {
       showError('Верификация обязательна. Сначала подтвердите реквизиты в Финансах.');
       return;
     }
-    setIsFree(false);
-    if (!tickets.length) setTickets([blankTicket()]);
+    setTicketMode(mode);
+    if (mode === 'free') {
+      haptic('selection');
+      return;
+    }
+    setTickets((prev) => {
+      const next = prev.length ? prev : [blankTicket(mode)];
+      if (mode === 'at_door') {
+        return next.map((t) => ({ ...t, paymentMode: 'at_door' }));
+      }
+      return next.map((t) => ({
+        ...t,
+        paymentMode: t.paymentMode === 'at_door' ? 'at_door' : 'online',
+      }));
+    });
     haptic('selection');
   };
 
   const updateTicket = (id, patch) => {
     setTickets((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  };
+
+  const moveTicket = (id, dir) => {
+    haptic('selection');
+    setTickets((prev) => {
+      const i = prev.findIndex((x) => x.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
   };
 
   const removeTicket = (id) => {
@@ -275,7 +280,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
       return;
     }
     if (!isFree) {
-      if (!verified) {
+      if (ticketMode === 'paid' && !verified) {
         showError('Верификация обязательна для платных ивентов');
         return;
       }
@@ -287,22 +292,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
 
     setBusy(true);
     try {
-      const payloadTickets = isFree
-        ? []
-        : tickets.map((t) => {
-            const price = Math.max(0, Number(t.price) || 0);
-            const originalPrice = Math.max(0, Number(t.originalPrice) || 0);
-            const label = ticketDiscountLabel(price, originalPrice);
-            return {
-              id: t.id,
-              name: t.name.trim(),
-              price,
-              capacity: Math.max(0, Number(t.capacity) || 0),
-              originalPrice: originalPrice > price ? originalPrice : undefined,
-              discountLabel: label || undefined,
-              seatsPerTicket: Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)),
-            };
-          });
+      const payloadTickets = isFree ? [] : serializeTickets(tickets, ticketMode);
 
       const nextSnap = await runActionSafe(isEdit ? 'update_event' : 'create_event', {
         eventId: isEdit ? event.id : undefined,
@@ -311,9 +301,14 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
         photos,
         startsAt,
         endsAt,
-        location: { name: locationName.trim(), address: locationAddress.trim() },
+        location: {
+          name: locationName.trim(),
+          city: locationCity.trim(),
+          address: locationAddress.trim(),
+        },
         interests,
         isFree,
+        ticketMode,
         freeEntryMode: isFree ? freeEntryMode : undefined,
         tickets: payloadTickets,
         status,
@@ -329,7 +324,9 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
 
   const entryLabel = isFree
     ? `Бесплатно · ${freeEntryMode === 'approval' ? 'с модерацией' : 'свободный вход'}`
-    : `Платно · ${tickets.length} тип(а)`;
+    : ticketMode === 'at_door'
+      ? `На входе · ${tickets.length} тип(а)`
+      : `Платно · ${tickets.length} тип(а)`;
 
   return (
     <>
@@ -440,6 +437,12 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                 onChange={(e) => setLocationName(e.target.value)}
               />
               <Input
+                header="Город"
+                placeholder="Ташкент"
+                value={locationCity}
+                onChange={(e) => setLocationCity(e.target.value)}
+              />
+              <Input
                 header="Адрес или ссылка на карту"
                 placeholder="Адрес / Google Maps"
                 value={locationAddress}
@@ -480,13 +483,22 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
               <div className="fm-segment-wrap fm-segment-wrap--media">
                 <SegmentedControl>
                   <SegmentedControl.Item
-                    selected={isFree}
-                    onClick={() => { setIsFree(true); haptic('selection'); }}
+                    selected={ticketMode === 'free'}
+                    onClick={() => applyTicketMode('free')}
                   >
                     Бесплатно
                   </SegmentedControl.Item>
-                  <SegmentedControl.Item selected={!isFree} onClick={setPaid}>
+                  <SegmentedControl.Item
+                    selected={ticketMode === 'paid'}
+                    onClick={() => applyTicketMode('paid')}
+                  >
                     Платно
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item
+                    selected={ticketMode === 'at_door'}
+                    onClick={() => applyTicketMode('at_door')}
+                  >
+                    На входе
                   </SegmentedControl.Item>
                 </SegmentedControl>
               </div>
@@ -509,109 +521,27 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                 </>
               ) : (
                 <div className="fm-ticket-list">
-                  {tickets.map((t, idx) => {
-                    const disc = ticketDiscountLabel(t.price, t.originalPrice);
-                    return (
-                      <div key={t.id} className="fm-ticket-card">
-                        <div className="fm-ticket-card-head">
-                          <span className="fm-ticket-card-title">Тип {idx + 1}</span>
-                          <button
-                            type="button"
-                            className="fm-ticket-remove"
-                            onClick={() => removeTicket(t.id)}
-                          >
-                            Удалить
-                          </button>
-                        </div>
-                        <Input
-                          header="Название"
-                          placeholder="Standard, VIP…"
-                          value={t.name}
-                          onChange={(e) => updateTicket(t.id, { name: e.target.value })}
-                        />
-                        <div className="fm-ticket-row">
-                          <Input
-                            header="Цена"
-                            type="number"
-                            inputMode="numeric"
-                            placeholder="0"
-                            value={t.price || ''}
-                            onChange={(e) => updateTicket(t.id, { price: Number(e.target.value) || 0 })}
-                          />
-                          <Input
-                            header="Старая цена"
-                            type="number"
-                            inputMode="numeric"
-                            placeholder="Скидка"
-                            value={t.originalPrice || ''}
-                            onChange={(e) => updateTicket(t.id, { originalPrice: Number(e.target.value) || 0 })}
-                          />
-                        </div>
-                        <Input
-                          header="Количество"
-                          type="number"
-                          inputMode="numeric"
-                          placeholder="100"
-                          value={t.capacity || ''}
-                          onChange={(e) => updateTicket(t.id, { capacity: Number(e.target.value) || 0 })}
-                        />
-                        <div className="fm-segment-wrap">
-                          <p className="fm-field-label">Гости на билет</p>
-                          <SegmentedControl>
-                            <SegmentedControl.Item
-                              selected={ticketGuestsMode(t.seatsPerTicket) === '1'}
-                              onClick={() => updateTicket(t.id, { seatsPerTicket: 1 })}
-                            >
-                              Одиночный
-                            </SegmentedControl.Item>
-                            <SegmentedControl.Item
-                              selected={ticketGuestsMode(t.seatsPerTicket) === '2'}
-                              onClick={() => updateTicket(t.id, { seatsPerTicket: 2 })}
-                            >
-                              Парный
-                            </SegmentedControl.Item>
-                            <SegmentedControl.Item
-                              selected={ticketGuestsMode(t.seatsPerTicket) === 'custom'}
-                              onClick={() => {
-                                const current = Math.max(1, Math.floor(Number(t.seatsPerTicket) || 3));
-                                updateTicket(t.id, { seatsPerTicket: current >= 3 ? current : 3 });
-                              }}
-                            >
-                              Своё
-                            </SegmentedControl.Item>
-                          </SegmentedControl>
-                        </div>
-                        {ticketGuestsMode(t.seatsPerTicket) === 'custom' ? (
-                          <Input
-                            header="Количество гостей"
-                            type="number"
-                            inputMode="numeric"
-                            min={3}
-                            max={10}
-                            placeholder="3"
-                            value={t.seatsPerTicket || ''}
-                            onChange={(e) =>
-                              updateTicket(t.id, { seatsPerTicket: Number(e.target.value) || 0 })
-                            }
-                          />
-                        ) : null}
-                        {disc ? (
-                          <p className="fm-ticket-discount-badge">Скидка {disc}</p>
-                        ) : (
-                          <p className="fm-empty-hint" style={{ margin: 0 }}>
-                            Старая цена необязательна — если больше цены, покажем скидку
-                          </p>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {tickets.map((t, idx) => (
+                    <TicketCardFields
+                      key={t.id}
+                      ticket={t}
+                      index={idx}
+                      ticketMode={ticketMode}
+                      onChange={(patch) => updateTicket(t.id, patch)}
+                      onRemove={() => removeTicket(t.id)}
+                      onMoveUp={idx > 0 ? () => moveTicket(t.id, -1) : undefined}
+                      onMoveDown={idx < tickets.length - 1 ? () => moveTicket(t.id, 1) : undefined}
+                      onPickSalesStart={() => setSalesTicketId(t.id)}
+                      canRemove={tickets.length > 1}
+                    />
+                  ))}
                   <Button
                     mode="outline"
                     size="l"
                     stretched
                     onClick={() => {
                       haptic('selection');
-                      setTickets((prev) => [...prev, blankTicket()]);
+                      setTickets((prev) => [...prev, blankTicket(ticketMode)]);
                     }}
                   >
                     + Добавить тип билета
@@ -669,7 +599,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                 />
                 <ValueRow
                   label="Место"
-                  value={[locationName, locationAddress].filter(Boolean).join(' · ') || '—'}
+                  value={[locationName, locationCity, locationAddress].filter(Boolean).join(' · ') || '—'}
                   onClick={() => jumpTo(4)}
                 />
                 <ValueRow
@@ -688,15 +618,7 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
                       <ValueRow
                         key={t.id}
                         label={t.name || `Билет ${i + 1}`}
-                        value={`${Number(t.price).toLocaleString('ru-RU')} UZS · ${t.capacity} шт. · ${
-                          Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1)) === 2
-                            ? 'пара (2 гостя)'
-                            : `${Math.max(1, Math.floor(Number(t.seatsPerTicket) || 1))} гост./билет`
-                        }${
-                          ticketDiscountLabel(t.price, t.originalPrice)
-                            ? ` · ${ticketDiscountLabel(t.price, t.originalPrice)}`
-                            : ''
-                        }`}
+                        value={`${Number(t.price).toLocaleString('ru-RU')} UZS · ${t.capacity || '—'} шт.`}
                         onClick={() => jumpTo(6)}
                         last={i === tickets.length - 1}
                       />
@@ -746,6 +668,16 @@ export function CreateEventSheet({ open, snapshot, event = null, onSnapshotChang
         onSave={(iso) => {
           setEndsAt(iso);
           setPicker(null);
+        }}
+      />
+      <DateTimePickerSheet
+        open={open && Boolean(salesTicketId)}
+        title="Старт продаж"
+        valueIso={tickets.find((t) => t.id === salesTicketId)?.salesStartDatetime || startsAt}
+        onClose={() => setSalesTicketId(null)}
+        onSave={(iso) => {
+          if (salesTicketId) updateTicket(salesTicketId, { salesStartDatetime: iso });
+          setSalesTicketId(null);
         }}
       />
     </>

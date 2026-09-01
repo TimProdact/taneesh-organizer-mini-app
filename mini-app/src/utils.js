@@ -64,6 +64,7 @@ export function deliveryTypeLabel(type) {
 /** upcoming | live | sold_out | paused | draft */
 export function phaseLabel(phase, paused, visible, status) {
   if (visible === false) return 'Скрыто';
+  if (status === 'cancelled' || phase === 'cancelled') return 'Отменено';
   if (status === 'draft' || phase === 'draft') return 'Черновик';
   if (paused || phase === 'paused') return 'Пауза';
   const map = {
@@ -77,7 +78,12 @@ export function phaseLabel(phase, paused, visible, status) {
 }
 
 export function eventEntryLabel(event) {
-  if (event?.isFree === false) {
+  const mode = event?.ticketMode;
+  if (mode === 'at_door' || (event?.isFree === false && (event.tickets || []).every((t) => t.paymentMode === 'at_door') && (event.tickets || []).length)) {
+    const n = (event.tickets || []).length;
+    return n ? `На входе · ${n} тип(а)` : 'На входе';
+  }
+  if (event?.isFree === false || mode === 'paid') {
     const n = (event.tickets || []).length;
     return n ? `Платно · ${n} тип(а)` : 'Платно';
   }
@@ -86,6 +92,7 @@ export function eventEntryLabel(event) {
 }
 
 export function eventEntryChip(event) {
+  if (event?.ticketMode === 'at_door') return 'Оплата на входе';
   if (event?.isFree === false) return 'Продажи открыты';
   if (event?.freeEntryMode === 'open') return 'Свободный вход';
   return 'Нужно подтверждение';

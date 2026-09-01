@@ -9,6 +9,7 @@ import { BottomSheet } from '../components/BottomSheet.jsx';
 import { FieldSheet } from '../components/FieldSheet.jsx';
 import { DateTimePickerSheet, formatEventDateTime } from '../components/DateTimePickerSheet.jsx';
 import { CreateEventSheet } from '../components/CreateEventSheet.jsx';
+import { TicketCardFields } from '../components/TicketCardFields.jsx';
 import {
   eventEntryLabel,
   eventMetricsRows,
@@ -17,6 +18,12 @@ import {
   formatPrice,
 } from '../utils.js';
 import { EVENT_INTERESTS } from '../config/eventInterests.js';
+import {
+  formTicketFromEvent,
+  serializeTickets,
+  ticketModeOf,
+  ticketsValid,
+} from '../config/ticketFields.js';
 import { copyText, haptic, runActionSafe, showError } from '../api.js';
 import { SCREENS } from '../navigation/screens.js';
 
@@ -34,6 +41,9 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
   const [field, setField] = useState(null); // name | description | locationName | locationAddress
   const [interestsOpen, setInterestsOpen] = useState(false);
   const [draftInterests, setDraftInterests] = useState([]);
+  const [ticketDraft, setTicketDraft] = useState(null);
+  const [salesPick, setSalesPick] = useState(false);
+  const ticketMode = ticketModeOf(event);
 
   const act = async (adminAction, payload = {}) => {
     if (busy) return;
@@ -51,7 +61,9 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
   const description = event.i18n?.description?.ru || '';
   const metrics = eventMetricsRows(event);
   const publicUrl = `${publicPageUrl()}?event=${event.id}`;
-  const previewLabel = event.isFree === false ? 'Страница покупки' : 'Страница регистрации';
+  const previewLabel = ticketMode === 'free' ? 'Страница регистрации' : 'Страница покупки';
+  const isDraft = event.status === 'draft' || event.phase === 'draft';
+  const isCancelled = event.status === 'cancelled' || event.phase === 'cancelled';
   const canDelete = !(
     (event.attendees || []).length
     || (event.sales || []).some((s) => s.status === 'paid')
@@ -138,7 +150,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           />
           <ValueRow
             label="Место"
-            value={[event.location?.name, event.location?.address].filter(Boolean).join(' · ') || '—'}
+            value={[event.location?.name, event.location?.city, event.location?.address].filter(Boolean).join(' · ') || '—'}
             onClick={() => setField('location')}
           />
           <ValueRow
@@ -152,16 +164,19 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           <ValueRow label="Вход" value={eventEntryLabel(event)} muted />
         </ValueGroup>
 
-        {!event.isFree && (event.tickets || []).length ? (
+        {ticketMode !== 'free' && (event.tickets || []).length ? (
           <ValueGroup header="Типы билетов">
             {(event.tickets || []).map((t) => (
               <ValueRow
                 key={t.id}
                 label={t.name || 'Билет'}
                 value={`${formatPrice(t.price)} · ${t.sold || 0}/${t.capacity}${
-                  t.discountLabel ? ` · ${t.discountLabel}` : ''
-                }`}
-                muted
+                  t.hidden ? ' · скрыт' : ''
+                }${t.discountLabel ? ` · ${t.discountLabel}` : ''}`}
+                onClick={() => {
+                  haptic('selection');
+                  setTicketDraft(formTicketFromEvent(t, ticketMode));
+                }}
               />
             ))}
           </ValueGroup>
@@ -181,7 +196,7 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
             value={String((event.attendees || []).length)}
             onClick={() => push(SCREENS.EVENT_ATTENDEES, { eventId: event.id })}
           />
-          {event.isFree === false ? (
+          {ticketMode !== 'free' ? (
             <MenuRow
               label="Продажи"
               glyph="💳"
@@ -218,6 +233,55 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
           >
             Редактировать
           </Button>
+          {isDraft && !isCancelled ? (
+            <Button
+              mode="filled"
+              size="l"
+              stretched
+              disabled={busy}
+              onClick={async () => {
+                setMenuOpen(false);
+                await act('publish_event');
+              }}
+            >
+              Опубликовать
+            </Button>
+          ) : null}
+          {!isCancelled && !isDraft ? (
+            <Button
+              mode="outline"
+              size="l"
+              stretched
+              disabled={busy}
+              onClick={async () => {
+                setMenuOpen(false);
+                await act('set_paused', { paused: !event.paused });
+              }}
+            >
+              {event.paused ? 'Снять паузу' : 'Пауза продаж'}
+            </Button>
+          ) : null}
+          {!isCancelled ? (
+            <Button
+              mode="outline"
+              size="l"
+              stretched
+              disabled={busy}
+              onClick={async () => {
+                setMenuOpen(false);
+                const tg = window.Telegram?.WebApp;
+                const ok = tg?.showConfirm
+                  ? await new Promise((resolve) => {
+                      tg.showConfirm('Отменить событие? Гости останутся в списке.', resolve);
+                    })
+                  : window.confirm('Отменить событие?');
+                if (!ok) return;
+                await act('cancel_event');
+              }}
+            >
+              Отменить событие
+            </Button>
+          ) : null}
           <Button
             mode="outline"
             size="l"
@@ -312,14 +376,18 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
       <FieldSheet
         open={field === 'location'}
         title="Место"
-        value={[event.location?.name, event.location?.address].filter(Boolean).join('\n')}
+        value={[event.location?.name, event.location?.city, event.location?.address].filter((x) => x != null).join('\n')}
         multiline
-        placeholder={'Название места\nАдрес или ссылка'}
+        placeholder={'Название места\nГород\nАдрес или ссылка'}
         onClose={() => setField(null)}
         onSave={(v) => {
-          const [name, ...rest] = String(v).split('\n');
+          const lines = String(v).split('\n');
           return act('set_event_location', {
-            location: { name: (name || '').trim(), address: rest.join('\n').trim() },
+            location: {
+              name: (lines[0] || '').trim(),
+              city: (lines[1] || '').trim(),
+              address: lines.slice(2).join('\n').trim(),
+            },
           });
         }}
       />
@@ -344,6 +412,50 @@ export function EventPage({ snapshot, onSnapshotChange, eventId, push, pop }) {
         onSave={async (iso) => {
           await act('set_ends_at', { endsAt: iso });
           setPicker(null);
+        }}
+      />
+
+      <BottomSheet
+        open={Boolean(ticketDraft)}
+        title={ticketDraft?.name || 'Тариф'}
+        onBack={() => { setTicketDraft(null); setSalesPick(false); }}
+        onClose={() => { setTicketDraft(null); setSalesPick(false); }}
+      >
+        {ticketDraft ? (
+          <div className="fm-ticket-list">
+            <TicketCardFields
+              ticket={ticketDraft}
+              index={Math.max(0, (event.tickets || []).findIndex((t) => t.id === ticketDraft.id))}
+              ticketMode={ticketMode}
+              onChange={(patch) => setTicketDraft((prev) => ({ ...prev, ...patch }))}
+              onRemove={undefined}
+              canRemove={false}
+              onPickSalesStart={() => setSalesPick(true)}
+            />
+            <Button
+              mode="filled"
+              size="l"
+              stretched
+              disabled={busy || !ticketsValid([ticketDraft])}
+              onClick={async () => {
+                const serialized = serializeTickets([ticketDraft], ticketMode)[0];
+                await act('update_ticket', { ticketId: ticketDraft.id, ticket: serialized });
+                setTicketDraft(null);
+              }}
+            >
+              Сохранить
+            </Button>
+          </div>
+        ) : null}
+      </BottomSheet>
+      <DateTimePickerSheet
+        open={salesPick && Boolean(ticketDraft)}
+        title="Старт продаж"
+        valueIso={ticketDraft?.salesStartDatetime || event.startsAt}
+        onClose={() => setSalesPick(false)}
+        onSave={(iso) => {
+          setTicketDraft((prev) => (prev ? { ...prev, salesStartDatetime: iso } : prev));
+          setSalesPick(false);
         }}
       />
 

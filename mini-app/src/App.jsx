@@ -132,6 +132,7 @@ export default function App() {
         return (
           <EventSalesPage
             snapshot={snapshot}
+            onSnapshotChange={setSnapshot}
             eventId={params.eventId}
           />
         );
