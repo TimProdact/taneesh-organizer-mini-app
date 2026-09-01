@@ -61,6 +61,21 @@ loadEnv();
 
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'TANEESH_ORG';
+const MINI_APP_BASE = (
+  process.env.ORGANIZER_MINI_APP_URL || 'https://taneesh-organizer-api.onrender.com/mini-app/'
+).replace(/\?.*$/, '');
+
+function miniAppOpenUrl() {
+  const u = new URL(MINI_APP_BASE.endsWith('/') ? MINI_APP_BASE : `${MINI_APP_BASE}/`);
+  u.searchParams.set('v', String(Date.now()));
+  return u.toString();
+}
+
+function webAppMarkup() {
+  return {
+    inline_keyboard: [[{ text: 'Открыть админку', web_app: { url: miniAppOpenUrl() } }]],
+  };
+}
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -75,15 +90,32 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function setStaticCache(res, filePath) {
+  const ext = extname(filePath);
+  if (ext === '.html' || !ext) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    return;
+  }
+  if (['.js', '.css', '.woff2', '.svg'].includes(ext)) {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  }
+}
+
 function tryStatic(req, res, pathname) {
   let rel = pathname;
   if (rel === '/' || rel === '') rel = '/index.html';
   const filePath = join(PUBLIC, rel.replace(/^\/+/, ''));
   if (!filePath.startsWith(PUBLIC) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    const missingExt = extname(rel);
+    /* Never serve HTML as a missing hashed asset — Telegram would cache a broken JS response. */
+    if (missingExt && missingExt !== '.html') return false;
     if (rel.startsWith('/mini-app')) {
       const index = join(PUBLIC, 'mini-app', 'index.html');
       if (existsSync(index)) {
         res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        setStaticCache(res, index);
         res.writeHead(200);
         res.end(readFileSync(index));
         return true;
@@ -92,6 +124,7 @@ function tryStatic(req, res, pathname) {
     return false;
   }
   res.setHeader('Content-Type', MIME[extname(filePath)] || 'application/octet-stream');
+  setStaticCache(res, filePath);
   res.writeHead(200);
   res.end(readFileSync(filePath));
   return true;
@@ -122,11 +155,15 @@ async function handleTelegramUpdate(update) {
   const chatId = msg.chat.id;
   const text = String(msg.text).trim();
   const api = `https://api.telegram.org/bot${TOKEN}`;
-  const reply = async (t) => {
+  const reply = async (t, replyMarkup) => {
     await fetch(`${api}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: t }),
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: t,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }),
     });
   };
 
@@ -134,8 +171,9 @@ async function handleTelegramUpdate(update) {
     await reply(
       'Taneesh — кабинет организатора.\n\n' +
         '1) /login <пароль> — привязать Telegram\n' +
-        '2) Кнопка «Админка» внизу\n\n' +
+        '2) Кнопка ниже или «Админка» в меню\n\n' +
         '/whoami — проверить доступ',
+      webAppMarkup(),
     );
     return;
   }
@@ -151,7 +189,7 @@ async function handleTelegramUpdate(update) {
       return;
     }
     await grantOrganizer(msg.from.id);
-    await reply(`Готово. ${msg.from.id} привязан. Открой «Админка».`);
+    await reply(`Готово. ${msg.from.id} привязан. Открой кабинет кнопкой ниже.`, webAppMarkup());
   }
 }
 

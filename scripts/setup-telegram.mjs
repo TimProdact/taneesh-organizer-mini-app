@@ -31,11 +31,19 @@ function loadEnv() {
 
 loadEnv();
 
+function withCacheBust(url) {
+  const u = new URL(url);
+  u.searchParams.set('v', String(Date.now()));
+  return u.toString();
+}
+
 const token = process.env.TELEGRAM_BOT_TOKEN;
-const miniAppUrl =
+const miniAppBase = (
   process.argv[2] ||
   process.env.ORGANIZER_MINI_APP_URL ||
-  '';
+  ''
+).replace(/\?.*$/, '');
+const miniAppUrl = miniAppBase ? withCacheBust(miniAppBase) : '';
 const apiUrl =
   process.argv[3] ||
   process.env.ORGANIZER_API_URL ||
@@ -132,7 +140,7 @@ function upsert(key, value) {
   if (re.test(envText)) envText = envText.replace(re, `${key}=${value}`);
   else envText += `\n${key}=${value}\n`;
 }
-upsert('ORGANIZER_MINI_APP_URL', miniAppUrl);
+upsert('ORGANIZER_MINI_APP_URL', miniAppBase);
 upsert('ORGANIZER_API_URL', apiUrl);
 writeFileSync(envPath, envText);
 console.log('→ .env updated with URLs');
