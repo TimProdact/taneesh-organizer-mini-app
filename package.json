@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev:mini-app": "npm run dev --prefix mini-app",
-    "build:mini-app": "npm run build --prefix mini-app && node scripts/sync-public.mjs",
+    "build:mini-app": "node -e \"console.log('Mini App = prebuilt cabinet in public/mini-app (npm run build:tg-app from Taneesh.org)')\"",
     "setup:telegram": "node scripts/setup-telegram.mjs",
     "deploy": "node scripts/deploy-render.mjs",
     "deploy:netlify": "node scripts/deploy-netlify.mjs",

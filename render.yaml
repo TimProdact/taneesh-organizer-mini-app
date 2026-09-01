@@ -5,7 +5,7 @@ services:
     plan: free
     region: frankfurt
     rootDir: .
-    buildCommand: npm install && npm install --prefix mini-app && npm run build:mini-app
+    buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
     envVars:
