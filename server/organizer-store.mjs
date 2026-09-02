@@ -93,6 +93,15 @@ export async function isOrganizer(telegramId) {
   return loadLocalIds().includes(id);
 }
 
+export async function listOrganizerTelegramIds() {
+  const ids = new Set(envIds());
+  for (const id of memoryGranted) ids.add(id);
+  const blobIds = await loadBlobIds();
+  if (blobIds) blobIds.forEach((id) => ids.add(id));
+  loadLocalIds().forEach((id) => ids.add(id));
+  return [...ids].filter((n) => Number.isFinite(n) && n > 0);
+}
+
 export async function grantOrganizer(telegramId) {
   const id = Number(telegramId);
   if (!Number.isFinite(id) || id <= 0) throw new Error('Bad telegram id');
@@ -197,14 +206,19 @@ function buildEventRecord(payload, existing = null) {
   const isFreeHint = payload.isFree != null ? payload.isFree !== false : existing?.isFree !== false;
   const ticketMode = resolveTicketMode(payload, existing, isFreeHint);
   const isFree = ticketMode === 'free';
+  const statusRaw = payload.status != null ? payload.status : existing?.status || 'published';
   const status =
-    payload.status != null
-      ? payload.status === 'cancelled'
-        ? 'cancelled'
-        : payload.status === 'draft'
-          ? 'draft'
-          : 'published'
-      : existing?.status || 'published';
+    statusRaw === 'cancelled'
+      ? 'cancelled'
+      : statusRaw === 'draft'
+        ? 'draft'
+        : statusRaw === 'pending' || statusRaw === 'on_moderation'
+          ? 'on_moderation'
+          : statusRaw === 'rejected'
+            ? 'rejected'
+            : statusRaw === 'hidden'
+              ? 'hidden'
+              : 'published';
   const tickets = normalizeTickets(
     payload.tickets != null ? payload.tickets : existing?.tickets,
     ticketMode,
@@ -278,7 +292,14 @@ function buildEventRecord(payload, existing = null) {
           : existing?.phase && existing.phase !== 'draft' && existing.phase !== 'cancelled'
             ? existing.phase
             : 'upcoming',
-    visible: payload.visible != null ? payload.visible : status !== 'draft' && status !== 'cancelled',
+    visible:
+      payload.visible != null
+        ? payload.visible
+        : status !== 'draft' &&
+          status !== 'cancelled' &&
+          status !== 'on_moderation' &&
+          status !== 'rejected' &&
+          status !== 'hidden',
     metrics: existing?.metrics || emptyMetrics(isFree, freeEntryMode),
     attendees: existing?.attendees || [],
     sales: existing?.sales || [],
@@ -541,10 +562,39 @@ function soldOrAttended(event) {
   return sold > 0 || attendees > 0 || sales > 0;
 }
 
-export async function runAction(adminAction, payload = {}) {
+async function emitNotify(adminAction, payload, ctx, extra = {}) {
+  try {
+    const { notifyAfterStoreAction } = await import('./organizer-notify.mjs');
+    await notifyAfterStoreAction({
+      adminAction,
+      payload,
+      telegramId: ctx.telegramId,
+      event: extra.event || (payload.eventId ? findEvent(payload.eventId) : null),
+      profile: store.profile,
+      controller: extra.controller,
+      extra,
+    });
+  } catch (err) {
+    console.warn('[organizer-store] notify', err?.message || err);
+  }
+}
+
+export async function runAction(adminAction, payload = {}, ctx = {}) {
   if (adminAction === 'create_event') {
-    store.events.push(buildEventRecord(payload));
+    const rec = buildEventRecord(payload);
+    store.events.push(rec);
     refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event: rec });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'submit_event') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    event.status = 'on_moderation';
+    event.phase = event.phase === 'draft' ? 'upcoming' : event.phase;
+    refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
     return getSnapshot();
   }
 
@@ -557,6 +607,12 @@ export async function runAction(adminAction, payload = {}) {
     }
     store.events[idx] = buildEventRecord(payload, existing);
     refreshMeta();
+    const next = store.events[idx];
+    const wasModeration = existing.status === 'on_moderation' || existing.status === 'pending';
+    const nowModeration = next.status === 'on_moderation' || next.status === 'pending';
+    if (nowModeration && !wasModeration) {
+      await emitNotify('submit_event', payload, ctx, { event: next });
+    }
     return getSnapshot();
   }
 
@@ -578,6 +634,7 @@ export async function runAction(adminAction, payload = {}) {
     event.phase = event.phase === 'draft' ? 'upcoming' : event.phase;
     event.visible = true;
     refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
     return getSnapshot();
   }
 
@@ -623,6 +680,9 @@ export async function runAction(adminAction, payload = {}) {
       }
     }
     refreshMeta();
+    if (adminAction === 'set_event_visible' && payload.visible === false) {
+      await emitNotify(adminAction, payload, ctx, { event });
+    }
     return getSnapshot();
   }
 
@@ -763,6 +823,7 @@ export async function runAction(adminAction, payload = {}) {
     event.visible = false;
     event.paused = true;
     refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
     return getSnapshot();
   }
 
@@ -797,6 +858,7 @@ export async function runAction(adminAction, payload = {}) {
       verified: false,
     };
     refreshMeta();
+    await emitNotify(adminAction, payload, ctx);
     return getSnapshot();
   }
 
@@ -809,6 +871,7 @@ export async function runAction(adminAction, payload = {}) {
         verified: status === 'approved',
       };
       refreshMeta();
+      await emitNotify(adminAction, payload, ctx);
     }
     return getSnapshot();
   }
@@ -826,7 +889,7 @@ export async function runAction(adminAction, payload = {}) {
     if (phoneNational.length !== 9) throw new Error('Укажите номер телефона (+998)');
     const dup = store.controllers.some((c) => c.phoneNational === phoneNational);
     if (dup) throw new Error('Контролер с таким номером уже есть');
-    store.controllers.push({
+    const controller = {
       id: `ctl-${Date.now()}`,
       name,
       phoneNational,
@@ -834,8 +897,10 @@ export async function runAction(adminAction, payload = {}) {
       scanCount: 0,
       addedAt: new Date().toISOString(),
       lastLoginAt: null,
-    });
+    };
+    store.controllers.push(controller);
     refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { controller });
     return getSnapshot();
   }
 
@@ -843,6 +908,99 @@ export async function runAction(adminAction, payload = {}) {
     const id = payload.controllerId;
     store.controllers = store.controllers.filter((c) => String(c.id) !== String(id));
     refreshMeta();
+    return getSnapshot();
+  }
+
+  if (adminAction === 'moderate_event') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    const status = payload.status;
+    if (status === 'published') {
+      event.status = 'published';
+      event.visible = true;
+      event.phase = event.phase === 'draft' ? 'upcoming' : event.phase;
+    } else if (status === 'rejected') {
+      event.status = 'rejected';
+      event.visible = false;
+    } else if (status === 'hidden') {
+      event.status = 'hidden';
+      event.visible = false;
+    } else if (status === 'cancelled') {
+      event.status = 'cancelled';
+      event.phase = 'cancelled';
+      event.visible = false;
+      event.paused = true;
+    } else if (status === 'on_moderation' || status === 'pending') {
+      event.status = 'on_moderation';
+    }
+    if (payload.comment) event.moderationComment = String(payload.comment);
+    refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'register_attendee') {
+    const event = findEvent(payload.eventId);
+    if (!event) throw new Error('Событие не найдено');
+    const attendeeId = payload.attendeeId || `att-${Date.now()}`;
+    event.attendees = event.attendees || [];
+    event.attendees.unshift({
+      id: attendeeId,
+      name: String(payload.name || '').trim() || 'Гость',
+      contact: String(payload.contact || payload.phone || '').trim(),
+      channel: 'phone',
+      type: 'pending',
+      source: 'registered',
+      checkIn: 'waiting',
+    });
+    refreshMeta();
+    await emitNotify(adminAction, { ...payload, attendeeId }, ctx, { event });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'request_refund') {
+    await emitNotify(adminAction, payload, ctx, { event: findEvent(payload.eventId) });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'cancel_hold') {
+    await emitNotify(adminAction, payload, ctx, { event: findEvent(payload.eventId) });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'mark_sold_out') {
+    const event = findEvent(payload.eventId);
+    if (event) event.status = 'sold_out';
+    refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
+    return getSnapshot();
+  }
+
+  if (adminAction === 'record_sale') {
+    const event = findEvent(payload.eventId);
+    if (event && payload.ticketId) {
+      const ticket = (event.tickets || []).find((t) => String(t.id) === String(payload.ticketId));
+      if (ticket) {
+        ticket.sold = Math.max(0, Number(ticket.sold) || 0) + Math.max(1, Number(payload.tickets) || 1);
+        const cap = Number(ticket.capacity) || 0;
+        payload.soldOut = cap > 0 && ticket.sold >= cap;
+        payload.ticketName = ticket.name;
+      }
+    }
+    refreshMeta();
+    await emitNotify(adminAction, payload, ctx, { event });
+    return getSnapshot();
+  }
+
+  if (
+    adminAction === 'payout_sent' ||
+    adminAction === 'payout_failed' ||
+    adminAction === 'billing_invoice' ||
+    adminAction === 'plan_limit' ||
+    adminAction === 'broadcast_maintenance' ||
+    adminAction === 'broadcast_legal'
+  ) {
+    await emitNotify(adminAction, payload, ctx);
     return getSnapshot();
   }
 

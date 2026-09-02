@@ -11,7 +11,14 @@ import {
   runAction,
   isOrganizer,
   grantOrganizer,
+  listOrganizerTelegramIds,
 } from './organizer-store.mjs';
+import {
+  notifyOrganizer,
+  isOrganizerNotifyType,
+  isPublicNotifyTrigger,
+  tickOrganizerSchedule,
+} from './organizer-notify.mjs';
 import {
   handleYougileUpdate,
   setupYougileBotWebhook,
@@ -62,7 +69,9 @@ loadEnv();
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'TANEESH_ORG';
 const MINI_APP_BASE = (
-  process.env.ORGANIZER_MINI_APP_URL || 'https://taneesh-organizer-api.onrender.com/mini-app/'
+  process.env.ORGANIZER_CABINET_URL ||
+  process.env.ORGANIZER_MINI_APP_URL ||
+  'https://timprodact.github.io/taneesh-org-app/'
 ).replace(/\?.*$/, '');
 
 function miniAppOpenUrl() {
@@ -142,7 +151,7 @@ async function authUser(body) {
   if (!parsed) throw Object.assign(new Error('Invalid Telegram session'), { status: 401 });
   if (!(await isOrganizer(parsed.user.id))) {
     throw Object.assign(
-      new Error('Нет доступа. Открой @taneesh_org_bot и отправь /login <пароль>.'),
+      new Error('Нет доступа. Открой @taneesh_organizer_bot и отправь /login <пароль>.'),
       { status: 403 },
     );
   }
@@ -193,6 +202,47 @@ async function handleTelegramUpdate(update) {
   }
 }
 
+async function handleNotifyRequest(body = {}) {
+  const type = body.type;
+  if (!isOrganizerNotifyType(type)) {
+    return { status: 400, body: { ok: false, error: 'unknown_type' } };
+  }
+
+  let telegramId = body.telegramId ?? body.telegram_id;
+  const secretOk = body.secret && body.secret === ADMIN_PASSWORD;
+
+  if (body.initData && TOKEN) {
+    const parsed = validateInitData(body.initData, TOKEN);
+    if (parsed?.user?.id && (await isOrganizer(parsed.user.id))) {
+      telegramId = parsed.user.id;
+    }
+  }
+
+  if (telegramId == null || telegramId === '') {
+    if (!(secretOk || isPublicNotifyTrigger(type))) {
+      return { status: 401, body: { ok: false, error: 'auth_required' } };
+    }
+  } else if (!secretOk) {
+    const granted = await listOrganizerTelegramIds();
+    if (!granted.includes(Number(telegramId))) {
+      if (!isPublicNotifyTrigger(type)) {
+        return { status: 403, body: { ok: false, error: 'not_organizer' } };
+      }
+      telegramId = undefined;
+    }
+  }
+
+  const result = await notifyOrganizer({
+    type,
+    telegramId,
+    payload: body.payload || {},
+    entityId: body.entityId || body.entity_id,
+    hash: body.hash,
+    idempotency_key: body.idempotency_key || body.idempotencyKey,
+  });
+  return { status: 200, body: { ok: true, ...result } };
+}
+
 const server = createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') {
@@ -240,8 +290,14 @@ const server = createServer(async (req, res) => {
         return sendJson(res, 200, { ok: true });
       }
 
+      if (body.action === 'notify') {
+        const result = await handleNotifyRequest(body);
+        return sendJson(res, result.status, result.body);
+      }
+
       const user = await authUser(body);
       if (body.action === 'bootstrap') {
+        tickOrganizerSchedule(getSnapshot()).catch((e) => console.warn('notify tick', e));
         return sendJson(res, 200, {
           snapshot: getSnapshot(),
           firstName: user.first_name,
@@ -249,10 +305,23 @@ const server = createServer(async (req, res) => {
         });
       }
       if (body.action === 'admin_action') {
-        const snapshot = await runAction(body.adminAction, body.payload || {});
+        const snapshot = await runAction(body.adminAction, body.payload || {}, { telegramId: user.id });
         return sendJson(res, 200, { snapshot });
       }
       return sendJson(res, 400, { error: 'Unknown action' });
+    }
+
+    if (req.method === 'POST' && (url.pathname === '/notify' || url.pathname === '/api/notify')) {
+      const body = await readBody(req);
+      const result = await handleNotifyRequest(body);
+      return sendJson(res, result.status, result.body);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/notify/tick') {
+      const body = await readBody(req).catch(() => ({}));
+      if (body.secret !== ADMIN_PASSWORD) return sendJson(res, 403, { error: 'Forbidden' });
+      const tick = await tickOrganizerSchedule(getSnapshot());
+      return sendJson(res, 200, tick);
     }
 
     if (req.method === 'GET' && tryStatic(req, res, url.pathname)) return;
@@ -285,4 +354,7 @@ server.listen(PORT, '0.0.0.0', () => {
   } else {
     console.warn('yougile bot: missing YOUGILE_* env — skip webhook/poll');
   }
+  const tickMs = Number(process.env.ORGANIZER_NOTIFY_TICK_MS || 60_000);
+  setTimeout(() => tickOrganizerSchedule(getSnapshot()).catch((e) => console.warn('notify tick', e)), 8_000);
+  setInterval(() => tickOrganizerSchedule(getSnapshot()).catch((e) => console.warn('notify tick', e)), tickMs);
 });

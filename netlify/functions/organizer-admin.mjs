@@ -5,7 +5,14 @@ import {
   isOrganizer,
   grantOrganizer,
   initBlobs,
+  listOrganizerTelegramIds,
 } from '../../server/organizer-store.mjs';
+import {
+  notifyOrganizer,
+  isOrganizerNotifyType,
+  isPublicNotifyTrigger,
+  tickOrganizerSchedule,
+} from '../../server/organizer-notify.mjs';
 
 const headers = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +33,7 @@ async function authUser(body) {
   if (!(await isOrganizer(parsed.user.id))) {
     throw Object.assign(
       new Error(
-        'Нет доступа. Открой @taneesh_org_bot и отправь /login <пароль>, либо попроси добавить твой Telegram ID.',
+        'Нет доступа. Открой @taneesh_organizer_bot и отправь /login <пароль>, либо попроси добавить твой Telegram ID.',
       ),
       { status: 403 },
     );
@@ -82,6 +89,48 @@ async function handleTelegramUpdate(update) {
   }
 }
 
+async function handleNotifyRequest(body = {}) {
+  const type = body.type;
+  if (!isOrganizerNotifyType(type)) {
+    return json(400, { ok: false, error: 'unknown_type' });
+  }
+  const password = process.env.ADMIN_PASSWORD || 'TANEESH_ORG';
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  let telegramId = body.telegramId ?? body.telegram_id;
+  const secretOk = body.secret && body.secret === password;
+
+  if (body.initData && token) {
+    const parsed = validateInitData(body.initData, token);
+    if (parsed?.user?.id && (await isOrganizer(parsed.user.id))) {
+      telegramId = parsed.user.id;
+    }
+  }
+
+  if (telegramId == null || telegramId === '') {
+    if (!(secretOk || isPublicNotifyTrigger(type))) {
+      return json(401, { ok: false, error: 'auth_required' });
+    }
+  } else if (!secretOk) {
+    const granted = await listOrganizerTelegramIds();
+    if (!granted.includes(Number(telegramId))) {
+      if (!isPublicNotifyTrigger(type)) {
+        return json(403, { ok: false, error: 'not_organizer' });
+      }
+      telegramId = undefined;
+    }
+  }
+
+  const result = await notifyOrganizer({
+    type,
+    telegramId,
+    payload: body.payload || {},
+    entityId: body.entityId || body.entity_id,
+    hash: body.hash,
+    idempotency_key: body.idempotency_key || body.idempotencyKey,
+  });
+  return json(200, { ok: true, ...result });
+}
+
 export async function handler(event) {
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
 
@@ -115,9 +164,14 @@ export async function handler(event) {
       return json(200, { ok: true });
     }
 
+    if (body.action === 'notify' || path.includes('/notify')) {
+      return handleNotifyRequest(body);
+    }
+
     const user = await authUser(body);
 
     if (body.action === 'bootstrap') {
+      tickOrganizerSchedule(getSnapshot()).catch((e) => console.warn('notify tick', e));
       return json(200, {
         snapshot: getSnapshot(),
         firstName: user.first_name,
@@ -126,7 +180,7 @@ export async function handler(event) {
     }
 
     if (body.action === 'admin_action') {
-      const snapshot = await runAction(body.adminAction, body.payload || {});
+      const snapshot = await runAction(body.adminAction, body.payload || {}, { telegramId: user.id });
       return json(200, { snapshot });
     }
 
