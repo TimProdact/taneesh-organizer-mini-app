@@ -65,8 +65,8 @@ const STRUCTURE_GUIDE =
   '<b>7. Приоритет</b>\n' +
   '<code>критично</code> · <code>важно</code> · <code>обычно</code> · <code>низкий</code>\n\n' +
   '<b>8. Исполнитель</b> — в конце\n' +
-  '<b>Рашид</b> и/или <b>Рауф</b>\n' +
-  '<i>Исполнитель: Рашид</i>' +
+  '<b>Рашид</b> · <b>Рауф</b> · <b>Алексей</b> · <b>Хома</b>\n' +
+  '<i>Исполнитель: Алексей</i>' +
   '</blockquote>\n\n' +
   'Дальше: <b>создать</b> или <b>отменить</b>';
 
@@ -110,6 +110,15 @@ const PEOPLE = [
     telegramId: 1696518783,
     label: 'Тимур',
   },
+  {
+    key: 'aleksey',
+    names: ['алексей', 'алекс', 'alexey', 'aleksey', 'yugay', 'югай', 'zzesso'],
+    yougileId: '44be7a28-34c6-4794-a719-c34d4b97591c',
+    email: 'yugayaleksey09@gmail.com',
+    telegram: '@zzesso',
+    telegramId: null, // узнаем после /start
+    label: 'Алексей',
+  },
 ];
 
 /** Кто может пользоваться ботом в личке (текст / голос). */
@@ -117,6 +126,7 @@ const TEAM_OPERATORS = [
   { id: 1696518783, username: 'mundesign', label: 'Тимур' },
   { id: 74803663, username: 'Marshall2221', label: 'Рашид' },
   { id: null, username: 'rauf_cc', label: 'Рауф' },
+  { id: null, username: 'zzesso', label: 'Алексей' },
 ];
 
 const USERS_PATH = join(ROOT, '.yougile-bot-users.json');
@@ -285,7 +295,7 @@ function isAllowedOperator(from) {
 async function denyAccess(chatId) {
   await reply(
     chatId,
-    'Доступ только для команды Taneesh (Тимур, Рашид @Marshall2221, Рауф @rauf_cc).\n' +
+    'Доступ только для команды Taneesh (Тимур, Рашид @Marshall2221, Рауф @rauf_cc, Алексей @zzesso).\n' +
       'Если ты из команды — напиши Тимуру.',
   );
 }
